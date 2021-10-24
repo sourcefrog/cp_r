@@ -34,6 +34,12 @@
 //! assert_eq!(stats.dirs, 0, "no children");
 //! assert_eq!(stats.symlinks, 0, "no symlinks");
 //! ```
+//!
+//! # Release history
+//!
+//! ## 0.1.0
+//!
+//! * Initial release.
 
 #![warn(missing_docs)]
 
