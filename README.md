@@ -10,4 +10,6 @@
 A small Rust library to copy a directory tree preserving mtimes and
 permissions, with minimal dependencies, and with clean error reporting.
 
+See the [docs](https://docs.rs/cp_r) for more information.
+
 License: MIT.
