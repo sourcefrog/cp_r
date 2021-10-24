@@ -24,7 +24,7 @@ fn basic_copy() {
     assert_eq!(fs::read(&dest_file_path).unwrap(), file_content);
     assert_eq!(stats.files, 1);
     assert_eq!(stats.file_bytes, file_content.len() as u64);
-    assert_eq!(stats.file_blocks, 1);
+    assert_eq!(stats.file_buffer_reads, 1);
 
     assert_eq!(
         fs::metadata(&dest_file_path).unwrap().modified().unwrap(),
@@ -33,17 +33,16 @@ fn basic_copy() {
 }
 
 #[test]
-fn larger_file() {
+fn larger_file_with_small_buffer_causes_multiple_reads() {
     let src = tempfile::tempdir().unwrap();
     let dest = tempfile::tempdir().unwrap();
     let file_content = b"some file content\n".repeat(1000);
     let file_name = "a file";
+    let small_copy_buffer_size = 200;
+
     fs::write(&src.path().join(file_name), &file_content).unwrap();
 
-    let options = CopyOptions {
-        copy_buffer_size: 200,
-        ..Default::default()
-    };
+    let options = CopyOptions::new().with_copy_buffer_size(small_copy_buffer_size);
     let stats = copy_tree(src.path(), dest.path(), &options).unwrap();
 
     assert_eq!(
@@ -53,8 +52,8 @@ fn larger_file() {
     assert_eq!(stats.files, 1);
     assert_eq!(stats.file_bytes, file_content.len() as u64);
     assert_eq!(
-        stats.file_blocks,
-        file_content.len() / options.copy_buffer_size
+        stats.file_buffer_reads,
+        file_content.len() / small_copy_buffer_size,
     );
 }
 
@@ -71,10 +70,7 @@ fn subdirs() {
     let file_content = b"some file content\n";
     fs::write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
 
-    let options = CopyOptions {
-        ..Default::default()
-    };
-    let stats = copy_tree(src.path(), dest.path(), &options).unwrap();
+    let stats = copy_tree(src.path(), dest.path(), &CopyOptions::default()).unwrap();
 
     assert_eq!(
         fs::read(&dest.path().join("a/aa/aaafile")).unwrap(),
@@ -93,10 +89,7 @@ fn subdirs() {
 #[test]
 fn clean_error_failing_to_copy_devices() {
     let dest = tempfile::tempdir().unwrap();
-    let options = CopyOptions {
-        ..Default::default()
-    };
-    let err = copy_tree(&Path::new("/dev"), dest.path(), &options).unwrap_err();
+    let err = copy_tree(&Path::new("/dev"), dest.path(), &Default::default()).unwrap_err();
     println!("{:#?}", err);
     assert_eq!(err.kind(), ErrorKind::UnsupportedFileType);
     assert_eq!(err.io_error().kind(), io::ErrorKind::Unsupported);
@@ -109,10 +102,7 @@ fn copy_dangling_symlink() {
     let src = tempfile::tempdir().unwrap();
     let dest = tempfile::tempdir().unwrap();
     std::os::unix::fs::symlink("dangling target", src.path().join("a_link")).unwrap();
-    let options = CopyOptions {
-        ..Default::default()
-    };
-    let stats = copy_tree(src.path(), dest.path(), &options).unwrap();
+    let stats = copy_tree(src.path(), dest.path(), &CopyOptions::new()).unwrap();
     println!("{:#?}", stats);
     assert_eq!(
         stats,
@@ -121,7 +111,7 @@ fn copy_dangling_symlink() {
             dirs: 0,
             symlinks: 1,
             file_bytes: 0,
-            file_blocks: 0,
+            file_buffer_reads: 0,
         }
     );
 }

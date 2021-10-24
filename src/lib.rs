@@ -16,18 +16,25 @@
 //! * Callbacks for logging, error handling, filtering, etc.
 //! * Overwrite existing directories or files.
 
+#![warn(missing_docs)]
+
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
+/// Options for [copy_tree].
+///
+/// Default options may be OK for many callers:
+/// * Preserve mtime and permissions.
+/// * Use an 8MiB copy buffer.
 #[derive(Debug)]
 pub struct CopyOptions {
     // TODO: Continue or stop on error?
     // TODO: Option controlling whether to copy mtimes?
     // TODO: Copy permissions?
     // TODO: Option to create destination directory...
-    pub copy_buffer_size: usize,
+    copy_buffer_size: usize,
 }
 
 impl Default for CopyOptions {
@@ -38,14 +45,36 @@ impl Default for CopyOptions {
     }
 }
 
+impl CopyOptions {
+    /// Construct reasonable default options.
+    pub fn new() -> CopyOptions {
+        CopyOptions::default()
+    }
+
+    /// Set the buffer size for copying regular files.
+    pub fn with_copy_buffer_size(self, copy_buffer_size: usize) -> CopyOptions {
+        CopyOptions {
+            copy_buffer_size,
+            ..self
+        }
+    }
+}
+
 /// Counters of how many things were copied.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct CopyStats {
+    /// The number of plain files copied.
     pub files: usize,
+    /// The number of directories copied.
     pub dirs: usize,
+    /// The number of symlinks copied.
     pub symlinks: usize,
+    /// The number of bytes of file content copied, across all files.
     pub file_bytes: u64,
-    pub file_blocks: usize,
+    /// The number of file buffers copied, per [CopyOptions::set_copy_buffer_size].
+    ///
+    /// (This is fairly obscure and mostly intended for testing.)
+    pub file_buffer_reads: usize,
 }
 
 #[derive(Debug)]
@@ -184,7 +213,7 @@ fn copy_file(src: &Path, dest: &Path, buf: &mut [u8], stats: &mut CopyStats) -> 
             break;
         }
         stats.file_bytes += len as u64;
-        stats.file_blocks += 1;
+        stats.file_buffer_reads += 1;
         outf.write_all(&buf[..len]).map_err(|io| Error {
             kind: ErrorKind::WriteFile,
             path: dest.to_owned(),
