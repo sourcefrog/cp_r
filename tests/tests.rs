@@ -86,6 +86,16 @@ fn subdirs() {
 }
 
 #[test]
+fn clean_error_on_nonexistent_source() {
+    let dest = tempfile::tempdir().unwrap();
+    let err = copy_tree(Path::new("nothing"), &dest.path(), &CopyOptions::new()).unwrap_err();
+    println!("err = {:#?}", err);
+    assert!(err.path().starts_with("nothing"));
+    assert_eq!(err.kind(), ErrorKind::ReadDir);
+    assert_eq!(err.io_error().kind(), io::ErrorKind::NotFound);
+}
+
+#[test]
 fn destination_must_already_exist() {
     // TODO: At least add an option to create the destination if it does not exist.
     // But, for now, it must.

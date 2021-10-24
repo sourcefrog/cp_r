@@ -1,9 +1,9 @@
 [package]
 name = "cp_r"
-version = "0.1.1"
+version = "0.1.2-pre"
 edition = "2018"
 authors = ["Martin Pool"]
-description = "Copy files and directories recursively, preserving mtime"
+description = "Copy files and directories recursively, preserving mtime and permissions"
 license = "MIT"
 repository = "https://github.com/sourcefrog/cp_r"
 categories = ["filesystem"]
