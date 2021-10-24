@@ -107,6 +107,7 @@ fn clean_error_failing_to_copy_devices() {
     assert_eq!(err.kind(), ErrorKind::UnsupportedFileType);
     assert_eq!(err.io_error().kind(), io::ErrorKind::Unsupported);
     assert!(err.path().strip_prefix("/dev/").is_ok());
+    assert!(format!("{}", err).starts_with("unsupported file type: /dev/"));
 }
 
 #[cfg(unix)]

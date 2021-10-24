@@ -44,6 +44,7 @@
 #![warn(missing_docs)]
 
 use std::collections::VecDeque;
+use std::fmt;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -103,6 +104,9 @@ pub struct CopyStats {
 }
 
 /// An error from copying a tree.
+///
+/// At present this library does not support continuing after an error, so only the first error is
+/// returned.
 #[derive(Debug)]
 pub struct Error {
     path: PathBuf,
@@ -112,7 +116,7 @@ pub struct Error {
 
 impl Error {
     /// Construct a new error.
-    fn new(kind: ErrorKind, path: PathBuf, message: String) -> Error {
+    pub fn new(kind: ErrorKind, path: PathBuf, message: String) -> Error {
         let io_kind: io::ErrorKind = match kind {
             ErrorKind::UnsupportedFileType => io::ErrorKind::Unsupported,
             other => unimplemented!("unhandled {:?}", other),
@@ -139,6 +143,28 @@ impl Error {
     /// The kind of error that occurred.
     pub fn kind(&self) -> ErrorKind {
         self.kind
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.io)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        use ErrorKind::*;
+        let kind_msg = match self.kind {
+            ReadDir => "reading source directory",
+            ReadFile => "reading source file",
+            WriteFile => "writing file",
+            CreateDir => "creating directory",
+            ReadSymlink => "reading symlink",
+            CreateSymlink => "creating symlink",
+            UnsupportedFileType => "unsupported file type",
+        };
+        write!(f, "{}: {}: {}", kind_msg, self.path.display(), self.io)
     }
 }
 
