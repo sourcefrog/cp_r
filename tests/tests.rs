@@ -95,7 +95,6 @@ fn destination_must_already_exist() {
     println!("err = {:#?}", err);
     assert!(err.path().starts_with(&dest));
     assert_eq!(err.kind(), ErrorKind::WriteFile);
-    // The actual IO error may vary per platform, but we can at least call it.
     assert_eq!(err.io_error().kind(), io::ErrorKind::NotFound);
 }
 
