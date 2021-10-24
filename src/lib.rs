@@ -37,8 +37,14 @@
 //!
 //! # Release history
 //!
-//! ## 0.1.0
+//! ## 0.1.1
+//! * [Error] implements [std::error::Error] and [std::fmt::Display].
 //!
+//! * [Error] is tested to be compatible with
+//!   [Anyhow](https://docs.rs/anyhow). (There is only a dev-dependency on Anyhow; users of this
+//!   library won't pull it in.)
+//!
+//! ## 0.1.0
 //! * Initial release.
 
 #![warn(missing_docs)]
