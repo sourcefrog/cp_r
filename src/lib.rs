@@ -2,6 +2,8 @@
 
 //! Copy a directory tree, including mtimes and permissions.
 //!
+//! The main function is [copy_tree], which may be configured by [CopyOptions].
+//!
 //! # Features
 //!
 //! * Minimal dependencies: currently just `filetime` to support copying mtimes.
@@ -11,10 +13,27 @@
 //!
 //! # Missing features that could be added
 //!
+//! * Create the destination directory if it does not exist, or error if it does exist.
 //! * Options to _not_ copy mtimes or permissions.
 //! * Continue copying after an error.
 //! * Callbacks for logging, error handling, filtering, etc.
 //! * Overwrite existing directories or files.
+//!
+//! # Example
+//!
+//! ```
+//! use std::path::Path;
+//! use cp_r::{CopyOptions, CopyStats, copy_tree};
+//! use tempfile;
+//!
+//! // Copy this crate's `src` directory.
+//! let dest = tempfile::tempdir().unwrap();
+//! let stats = copy_tree(Path::new("src"), dest.path(),
+//!     &CopyOptions::new()).unwrap();
+//! assert_eq!(stats.files, 1, "only one file in src");
+//! assert_eq!(stats.dirs, 0, "no children");
+//! assert_eq!(stats.symlinks, 0, "no symlinks");
+//! ```
 
 #![warn(missing_docs)]
 
@@ -71,12 +90,13 @@ pub struct CopyStats {
     pub symlinks: usize,
     /// The number of bytes of file content copied, across all files.
     pub file_bytes: u64,
-    /// The number of file buffers copied, per [CopyOptions::set_copy_buffer_size].
+    /// The number of file buffers copied, per [CopyOptions::with_copy_buffer_size].
     ///
     /// (This is fairly obscure and mostly intended for testing.)
     pub file_buffer_reads: usize,
 }
 
+/// An error from copying a tree.
 #[derive(Debug)]
 pub struct Error {
     path: PathBuf,
@@ -137,6 +157,9 @@ pub enum ErrorKind {
     UnsupportedFileType,
 }
 
+/// Recursively copy a directory tree.
+///
+/// The destination should already exist and be empty.
 pub fn copy_tree(src: &Path, dest: &Path, options: &CopyOptions) -> Result<CopyStats, Error> {
     let mut stats = CopyStats::default();
     let mut subdir_queue: VecDeque<PathBuf> = VecDeque::new();
