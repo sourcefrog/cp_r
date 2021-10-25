@@ -13,7 +13,6 @@
 //!
 //! # Missing features that could be added
 //!
-//! * Create the destination directory if it does not exist, or error if it does exist.
 //! * Options to _not_ copy mtimes or permissions.
 //! * Continue copying after an error.
 //! * Callbacks for logging, error handling, filtering, etc.
@@ -36,6 +35,11 @@
 //! ```
 //!
 //! # Release history
+//!
+//! ## 0.2.0
+//! * [copy_tree] will create the immediate destination directory by default, but this can be
+//!   controlled by [CopyOptions::create_destination]. The destination, if created, is counted in
+//!   [CopyStats::dirs] and inherits its permissions from the source.
 //!
 //! ## 0.1.1
 //! * [Error] implements [std::error::Error] and [std::fmt::Display].
@@ -60,19 +64,21 @@ use std::path::{Path, PathBuf};
 /// Default options may be OK for many callers:
 /// * Preserve mtime and permissions.
 /// * Use an 8MiB copy buffer.
+/// * Create the destination if it does not exist.
 #[derive(Debug)]
 pub struct CopyOptions {
     // TODO: Continue or stop on error?
     // TODO: Option controlling whether to copy mtimes?
     // TODO: Copy permissions?
-    // TODO: Option to create destination directory...
     copy_buffer_size: usize,
+    create_destination: bool,
 }
 
 impl Default for CopyOptions {
     fn default() -> CopyOptions {
         CopyOptions {
             copy_buffer_size: 8 << 20,
+            create_destination: true,
         }
     }
 }
@@ -87,6 +93,16 @@ impl CopyOptions {
     pub fn with_copy_buffer_size(self, copy_buffer_size: usize) -> CopyOptions {
         CopyOptions {
             copy_buffer_size,
+            ..self
+        }
+    }
+
+    /// Set whether [copy_tree] should create the destination if it does not exist (the default) or return an error.
+    ///
+    /// Only the immediate destination is created, not all its parents.
+    pub fn create_destination(self, create_destination: bool) -> CopyOptions {
+        CopyOptions {
+            create_destination,
             ..self
         }
     }
@@ -196,10 +212,13 @@ pub enum ErrorKind {
 }
 
 /// Recursively copy a directory tree.
-///
-/// The destination should already exist and be empty.
 pub fn copy_tree(src: &Path, dest: &Path, options: &CopyOptions) -> Result<CopyStats, Error> {
     let mut stats = CopyStats::default();
+
+    if options.create_destination && !dest.is_dir() {
+        copy_dir(src, dest, &mut stats)?;
+    }
+
     let mut subdir_queue: VecDeque<PathBuf> = VecDeque::new();
     subdir_queue.push_back(PathBuf::from(""));
     assert!(options.copy_buffer_size > 0);

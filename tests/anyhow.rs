@@ -24,7 +24,7 @@ fn attach_anyhow_context_to_failure() {
     let err = copy_tree(
         &Path::new("src"),
         &dest.path().join("nonexistent"),
-        &CopyOptions::new(),
+        &CopyOptions::new().create_destination(false),
     )
     .context("copy src dir for test")
     .unwrap_err();

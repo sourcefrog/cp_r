@@ -96,12 +96,44 @@ fn clean_error_on_nonexistent_source() {
 }
 
 #[test]
-fn destination_must_already_exist() {
+fn create_destination_by_default() {
+    let empty_src = tempfile::tempdir().unwrap();
+    let dest_parent = tempfile::tempdir().unwrap();
+    let dest = dest_parent.path().join("nonexistent_child");
+    let stats = copy_tree(&empty_src.path(), &dest, &CopyOptions::new()).unwrap();
+    assert!(dest.is_dir());
+    assert_eq!(stats.dirs, 1);
+    assert_eq!(stats.files, 0);
+}
+
+#[test]
+fn create_destination_when_requested() {
+    let empty_src = tempfile::tempdir().unwrap();
+    let dest_parent = tempfile::tempdir().unwrap();
+    let dest = dest_parent.path().join("nonexistent_child");
+    let stats = copy_tree(
+        &empty_src.path(),
+        &dest,
+        &CopyOptions::new().create_destination(true),
+    )
+    .unwrap();
+    assert!(dest.is_dir());
+    assert_eq!(stats.dirs, 1);
+    assert_eq!(stats.files, 0);
+}
+
+#[test]
+fn optionally_destination_must_exist() {
     // TODO: At least add an option to create the destination if it does not exist.
     // But, for now, it must.
     let dest_parent = tempfile::tempdir().unwrap();
     let dest = dest_parent.path().join("nonexistent_child");
-    let err = copy_tree(Path::new("src"), &dest, &CopyOptions::new()).unwrap_err();
+    let err = copy_tree(
+        Path::new("src"),
+        &dest,
+        &CopyOptions::new().create_destination(false),
+    )
+    .unwrap_err();
     println!("err = {:#?}", err);
     assert!(err.path().starts_with(&dest));
     assert_eq!(err.kind(), ErrorKind::WriteFile);
