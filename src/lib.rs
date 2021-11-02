@@ -36,6 +36,10 @@
 //!
 //! # Release history
 //!
+//! ## unreleased
+//! 
+//! * Added [CopyOptions::filter].
+//! 
 //! ## 0.2.0
 //! * [copy_tree] will create the immediate destination directory by default, but this can be
 //!   controlled by [CopyOptions::create_destination]. The destination, if created, is counted in
@@ -65,13 +69,13 @@ use std::path::{Path, PathBuf};
 /// * Preserve mtime and permissions.
 /// * Use an 8MiB copy buffer.
 /// * Create the destination if it does not exist.
-#[derive(Debug)]
 pub struct CopyOptions {
     // TODO: Continue or stop on error?
     // TODO: Option controlling whether to copy mtimes?
     // TODO: Copy permissions?
     copy_buffer_size: usize,
     create_destination: bool,
+    filter: Option<fn(&Path, &fs::DirEntry) -> Result<bool>>,
 }
 
 impl Default for CopyOptions {
@@ -79,6 +83,7 @@ impl Default for CopyOptions {
         CopyOptions {
             copy_buffer_size: 8 << 20,
             create_destination: true,
+            filter: None,
         }
     }
 }
@@ -103,6 +108,51 @@ impl CopyOptions {
     pub fn create_destination(self, create_destination: bool) -> CopyOptions {
         CopyOptions {
             create_destination,
+            ..self
+        }
+    }
+
+    /// Set a filter callback that can determine which files should be copied.
+    ///
+    /// The filter can return
+    /// * `Ok(true)` to copy an entry (and recursively continue into directories)
+    /// * `Ok(false)` to skip an entry (and anything inside the directory)
+    /// * `Err(_)` to stop copying and return this error
+    ///
+    /// The path is relative to the top of the tree. The [std::fs::DirEntry] gives access to the file type and other metadata of the source file.
+    ///
+    /// ```
+    /// use std::fs;
+    /// use std::path::Path;
+    /// use cp_r::{CopyOptions, copy_tree};
+    ///
+    /// fn skip_tmp(path: &Path, _: &fs::DirEntry) -> cp_r::Result<bool> {
+    ///     if path.extension().and_then(|s| s.to_str()) == Some("tmp") {
+    ///         Ok(false)
+    ///     } else {
+    ///         Ok(true)
+    ///     }
+    /// }
+    /// let options = CopyOptions::new().filter(skip_tmp);
+    ///
+    /// let src = tempfile::tempdir().unwrap();
+    /// fs::write(src.path().join("transient.tmp"), b"hello?").unwrap();
+    /// fs::write(src.path().join("permanent.txt"), b"hello?").unwrap();
+    /// let dest = tempfile::tempdir().unwrap();
+    ///
+    /// let stats = copy_tree(&src.path(), &dest.path(), &options).unwrap();
+    ///
+    /// assert!(dest.path().join("permanent.txt").exists());
+    /// assert!(!dest.path().join("transient.tmp").exists());
+    /// assert_eq!(stats.files, 1);
+    /// ```
+    /// 
+    /// TODO: This does not support closures yet, but should.
+    /// 
+    /// TODO: Count skipped files in [CopyStats].
+    pub fn filter(self, filter: fn(&Path, &fs::DirEntry) -> Result<bool>) -> CopyOptions {
+        CopyOptions {
+            filter: Some(filter),
             ..self
         }
     }
@@ -234,15 +284,21 @@ pub fn copy_tree(src: &Path, dest: &Path, options: &CopyOptions) -> Result<CopyS
             io,
             kind: ErrorKind::ReadDir,
         })? {
-            let entry = entry.map_err(|io| Error {
+            let dir_entry = entry.map_err(|io| Error {
                 path: subdir_full_path.clone(),
                 io,
                 kind: ErrorKind::ReadDir,
             })?;
-            let entry_subpath = subdir.join(entry.file_name());
+            let entry_subpath = subdir.join(dir_entry.file_name());
+            if !options
+                .filter
+                .map_or(Ok(true), |f| f(&entry_subpath, &dir_entry))?
+            {
+                continue;
+            }
             let src_fullpath = src.join(&entry_subpath);
             let dest_fullpath = dest.join(&entry_subpath);
-            match entry.file_type().map_err(|io| Error {
+            match dir_entry.file_type().map_err(|io| Error {
                 path: src_fullpath.clone(),
                 io,
                 kind: ErrorKind::ReadDir,
