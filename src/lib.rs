@@ -136,6 +136,9 @@ pub struct Error {
     kind: ErrorKind,
 }
 
+/// A [std::result::Result] possibly containing a cp_r [Error].
+pub type Result<T> = std::result::Result<T, Error>;
+
 impl Error {
     /// Construct a new error.
     pub fn new(kind: ErrorKind, path: PathBuf, message: String) -> Error {
@@ -175,7 +178,7 @@ impl std::error::Error for Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use ErrorKind::*;
         let kind_msg = match self.kind {
             ReadDir => "reading source directory",
@@ -212,7 +215,7 @@ pub enum ErrorKind {
 }
 
 /// Recursively copy a directory tree.
-pub fn copy_tree(src: &Path, dest: &Path, options: &CopyOptions) -> Result<CopyStats, Error> {
+pub fn copy_tree(src: &Path, dest: &Path, options: &CopyOptions) -> Result<CopyStats> {
     let mut stats = CopyStats::default();
 
     if options.create_destination && !dest.is_dir() {
@@ -265,7 +268,7 @@ pub fn copy_tree(src: &Path, dest: &Path, options: &CopyOptions) -> Result<CopyS
     Ok(stats)
 }
 
-fn copy_file(src: &Path, dest: &Path, buf: &mut [u8], stats: &mut CopyStats) -> Result<(), Error> {
+fn copy_file(src: &Path, dest: &Path, buf: &mut [u8], stats: &mut CopyStats) -> Result<()> {
     let mut inf = fs::OpenOptions::new()
         .read(true)
         .open(src)
@@ -325,7 +328,7 @@ fn copy_file(src: &Path, dest: &Path, buf: &mut [u8], stats: &mut CopyStats) -> 
     Ok(())
 }
 
-fn copy_dir(_src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<(), Error> {
+fn copy_dir(_src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
     fs::create_dir(dest)
         .map_err(|io| Error {
             kind: ErrorKind::CreateDir,
@@ -336,7 +339,7 @@ fn copy_dir(_src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<(), Error
 }
 
 #[cfg(unix)]
-fn copy_symlink(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<(), Error> {
+fn copy_symlink(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
     let target = fs::read_link(src).map_err(|io| Error {
         kind: ErrorKind::ReadSymlink,
         path: src.to_owned(),
@@ -352,6 +355,6 @@ fn copy_symlink(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<(), Er
 }
 
 #[cfg(windows)]
-fn copy_symlink(_src: &Path, _dest: &Path, _stats: &mut CopyStats) -> Result<(), Error> {
+fn copy_symlink(_src: &Path, _dest: &Path, _stats: &mut CopyStats) -> Result<()> {
     unimplemented!("symlinks are not yet supported on Windows");
 }
