@@ -10,12 +10,14 @@
 //! * Returns [CopyStats] describing how much data and how many files were copied.
 //! * Tested on Linux, macOS and Windows.
 //! * Copies mtimes and permissions.
+//! * Callers can provide a [callback to filter which files or directories are
+//!   copied](CopyOptions::filter).
 //!
 //! # Missing features that could be added
 //!
 //! * Options to _not_ copy mtimes or permissions.
 //! * Continue copying after an error.
-//! * Callbacks for logging, error handling, filtering, etc.
+//! * Callbacks for logging, error handling, , etc.
 //! * Overwrite existing directories or files.
 //!
 //! # Example

@@ -261,7 +261,7 @@ fn filter_by_mut_closure() {
             filtered_out: 1,
         }
     );
-    // The order in which entries are seen is not guaranteed, and in practice 
+    // The order in which entries are seen is not guaranteed, and in practice
     // will be partly determined by the unpredictable order that the filesystem
     // returns directory entries.
     //
