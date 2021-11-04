@@ -261,10 +261,12 @@ fn filter_by_mut_closure() {
             filtered_out: 1,
         }
     );
-    // All the entries from the top level directory are seen before their
-    // children.
+    // The order in which entries are seen is not guaranteed, and in practice 
+    // will be partly determined by the unpredictable order that the filesystem
+    // returns directory entries.
     //
     // "b" is seen (because the filter records it before filtering it out), but
     // b's children are not visited.
-    assert_eq!(filter_seen_paths, ["a", "b", "a/aa", "a/aa/aaafile"]);
+    filter_seen_paths.sort_unstable();
+    assert_eq!(filter_seen_paths, ["a", "a/aa", "a/aa/aaafile", "b"]);
 }
