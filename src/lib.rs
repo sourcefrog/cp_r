@@ -146,6 +146,7 @@ impl<'f> CopyOptions<'f> {
     ///
     /// assert!(dest.path().join("permanent.txt").exists());
     /// assert!(!dest.path().join("transient.tmp").exists());
+    /// assert_eq!(stats.filtered_out, 1);
     /// assert_eq!(stats.files, 1);
     /// ```
     ///
@@ -194,6 +195,7 @@ impl<'f> CopyOptions<'f> {
                 let entry_subpath = subdir.join(dir_entry.file_name());
                 if let Some(filter) = &mut self.filter {
                     if !filter(&entry_subpath, &dir_entry)? {
+                        stats.filtered_out += 1;
                         continue;
                     }
                 }
@@ -241,6 +243,8 @@ pub struct CopyStats {
     ///
     /// (This is fairly obscure and mostly intended for testing.)
     pub file_buffer_reads: usize,
+    /// The number of entries filtered out by the [CopyOptions::filter] callback.
+    pub filtered_out: usize,
 }
 
 /// An error from copying a tree.

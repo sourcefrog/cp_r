@@ -177,6 +177,7 @@ fn copy_dangling_symlink() {
             symlinks: 1,
             file_bytes: 0,
             file_buffer_reads: 0,
+            filtered_out: 0,
         }
     );
 }
@@ -215,6 +216,7 @@ fn filter_by_path() {
             dirs: 2,
             symlinks: 0,
             file_buffer_reads: 1,
+            filtered_out: 1,
         }
     );
 }
@@ -256,6 +258,7 @@ fn filter_by_mut_closure() {
             dirs: 2,
             symlinks: 0,
             file_buffer_reads: 1,
+            filtered_out: 1,
         }
     );
     // All the entries from the top level directory are seen before their
