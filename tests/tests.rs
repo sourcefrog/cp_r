@@ -4,7 +4,7 @@
 
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cp_r::*;
 
@@ -234,10 +234,10 @@ fn filter_by_mut_closure() {
 
     // Filter paths and also collect all the paths we've seen, as an example of a filter
     // that's more than a simple function pointer.
-    let mut filter_seen_paths: Vec<PathBuf> = Vec::new();
+    let mut filter_seen_paths: Vec<String> = Vec::new();
     let stats = CopyOptions::default()
-        .filter(move |path: &Path, _de| {
-            filter_seen_paths.push(path.to_owned());
+        .filter(|path: &Path, _de| {
+            filter_seen_paths.push(path.display().to_string());
             Ok(path != Path::new("b"))
         })
         .copy_tree(src.path(), dest.path())
@@ -258,4 +258,10 @@ fn filter_by_mut_closure() {
             file_buffer_reads: 1,
         }
     );
+    // All the entries from the top level directory are seen before their
+    // children.
+    //
+    // "b" is seen (because the filter records it before filtering it out), but
+    // b's children are not visited.
+    assert_eq!(filter_seen_paths, ["a", "b", "a/aa", "a/aa/aaafile"]);
 }
