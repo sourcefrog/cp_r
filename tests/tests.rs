@@ -194,14 +194,6 @@ fn filter_by_path() {
     let file_content = b"some file content\n";
     fs::write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
 
-    // let mut filter_seen_paths : Vec<PathBuf> = Vec::new();
-
-    // let options = CopyOptions::default().filter(|path, de| {
-    //     filter_seen_paths.push(path.to_owned());
-    //     if path == Path::new("b") {
-    //         Ok(false)
-    //     } else {Ok(true)}
-    // });
     fn not_b(path: &Path, _: &fs::DirEntry) -> cp_r::Result<bool> {
         Ok(path != Path::new("b"))
     }
@@ -215,9 +207,16 @@ fn filter_by_path() {
         file_content
     );
     assert!(!dest.path().join("b").exists());
-    assert_eq!(stats.files, 1);
-    assert_eq!(stats.file_bytes, file_content.len() as u64);
-    assert_eq!(stats.dirs, 2);
+    assert_eq!(
+        stats,
+        CopyStats {
+            files: 1,
+            file_bytes: file_content.len() as u64,
+            dirs: 2,
+            symlinks: 0,
+            file_buffer_reads: 1,
+        }
+    );
 }
 
 #[test]
@@ -249,7 +248,14 @@ fn filter_by_mut_closure() {
         file_content
     );
     assert!(!dest.path().join("b").exists());
-    assert_eq!(stats.files, 1);
-    assert_eq!(stats.file_bytes, file_content.len() as u64);
-    assert_eq!(stats.dirs, 2);
+    assert_eq!(
+        stats,
+        CopyStats {
+            files: 1,
+            file_bytes: file_content.len() as u64,
+            dirs: 2,
+            symlinks: 0,
+            file_buffer_reads: 1,
+        }
+    );
 }
