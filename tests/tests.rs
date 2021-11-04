@@ -239,7 +239,7 @@ fn filter_by_mut_closure() {
     let mut filter_seen_paths: Vec<String> = Vec::new();
     let stats = CopyOptions::default()
         .filter(|path: &Path, _de| {
-            filter_seen_paths.push(path.display().to_string());
+            filter_seen_paths.push(path.to_str().unwrap().replace('\\', "/"));
             Ok(path != Path::new("b"))
         })
         .copy_tree(src.path(), dest.path())
