@@ -17,8 +17,9 @@
 //!
 //! * Options to _not_ copy mtimes or permissions.
 //! * Continue copying after an error.
-//! * Callbacks for logging, error handling, , etc.
+//! * Callbacks for progress or logging, error handling, , etc.
 //! * Overwrite existing directories or files.
+//! * Copy single files: don't assume the source path is a directory.
 //!
 //! # Example
 //!
