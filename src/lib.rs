@@ -17,7 +17,7 @@
 //!
 //! * Options to _not_ copy mtimes or permissions.
 //! * Continue copying after an error.
-//! * Callbacks for progress or logging, error handling, , etc.
+//! * Callbacks for progress or logging, error handling, etc.
 //! * Overwrite existing directories or files.
 //! * Copy single files: don't assume the source path is a directory.
 //!
@@ -169,8 +169,6 @@ impl<'f> CopyOptions<'f> {
     /// Copy the tree according to the options.
     ///
     /// Returns [CopyStats] describing how many files were copied, etc.
-    ///
-    /// *TODO:* Count filtered-out files in [CopyStats].
     pub fn copy_tree(&mut self, src: &Path, dest: &Path) -> Result<CopyStats> {
         let mut stats = CopyStats::default();
 
