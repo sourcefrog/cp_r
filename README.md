@@ -11,6 +11,14 @@
 A small Rust library to copy a directory tree preserving mtimes and
 permissions, with minimal dependencies, and with clean error reporting.
 
+## Features
+
+* Minimal dependencies: currently just `filetime` to support copying mtimes.
+* Returns a struct describing how much data and how many files were copied.
+* Tested on Linux, macOS and Windows.
+* Copies mtimes and permissions.
+* Can call a callback to filter which files or directories are copied.
+
 See the [docs](https://docs.rs/cp_r) for more information.
 
 Patches welcome!
