@@ -84,6 +84,12 @@ pub struct CopyOptions<'f> {
     // TODO: Copy permissions?
     copy_buffer_size: usize,
     create_destination: bool,
+
+    // I agree with Clippy that this is a complex type, but stable Rust seems
+    // to have no other way to spell it, because you can't make a type
+    // or trait
+    // alias for a Fn.
+    #[allow(clippy::type_complexity)]
     filter: Option<Box<dyn FnMut(&Path, &DirEntry) -> Result<bool> + 'f>>,
 }
 
