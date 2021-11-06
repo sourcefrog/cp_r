@@ -46,6 +46,11 @@
 //!
 //! Unreleased
 //!
+//! API changes:
+//!
+//! * [CopyOptions::copy_tree] consumes `self` (rather than taking `&mut self`),
+//!   which reduces lifetime issues in accessing values owned by callbacks.
+//!
 //! New features:
 //!
 //! * [CopyOptions::after_entry_copied] callback added, which can be used for
@@ -212,7 +217,7 @@ impl<'f> CopyOptions<'f> {
     /// Copy the tree according to the options.
     ///
     /// Returns [CopyStats] describing how many files were copied, etc.
-    pub fn copy_tree(&mut self, src: &Path, dest: &Path) -> Result<CopyStats> {
+    pub fn copy_tree(mut self, src: &Path, dest: &Path) -> Result<CopyStats> {
         let mut stats = CopyStats::default();
 
         if self.create_destination && !dest.is_dir() {
