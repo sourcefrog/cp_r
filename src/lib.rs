@@ -2,15 +2,20 @@
 
 //! Copy a directory tree, including mtimes and permissions.
 //!
-//! To copy a tree, first configure parameters on [CopyOptions] and then call [CopyOptions::copy_tree).
+//! To copy a tree, first configure parameters on [CopyOptions] and then call
+//! [CopyOptions::copy_tree].
 //!
 //! # Features
 //!
 //! * Minimal dependencies: currently just `filetime` to support copying mtimes.
-//! * Returns [CopyStats] describing how much data and how many files were copied.
+//! * Returns [CopyStats] describing how much data and how many files were
+//!   copied.
 //! * Tested on Linux, macOS and Windows.
 //! * Copies mtimes and permissions.
-//! * Can call a [callback to filter which entries are copied](CopyOptions::filter).
+//! * Takes an optional callback to decide which entries are copied or skipped,
+//!   [CopyOptions::filter].
+//! * Takes an optional callback to show progress or record which files are copied,
+//!   [CopyOptions::after_entry_copied].
 //!
 //! # Missing features that could be added
 //!
@@ -37,29 +42,42 @@
 //!
 //! # Release history
 //!
+//! ## 0.3.1
+//!
+//! Unreleased
+//!
+//! New features:
+//!
+//! * [CopyOptions::after_entry_copied] callback added, which can be used for
+//!   example to draw a progress bar.
+//!
 //! ## 0.3.0
+//!
+//! Released 2021-11-06
 //!
 //! API changes:
 //!
 //! * [CopyOptions] builder functions now return `self` rather than `&mut self`.
-//! * The actual copy operation is run by calling [CopyOptions::copy_tree], rather than passing the
-//!   options as a parameter to `copy_tree`.
+//! * The actual copy operation is run by calling [CopyOptions::copy_tree],
+//!   rather than passing the options as a parameter to `copy_tree`.
 //! * Rename `with_copy_buffer_size` to `copy_buffer_size`.
 //!
 //! New features:
-//! * A new option to provide a filter on which entries should be copied, through [CopyOptions::filter].
+//! * A new option to provide a filter on which entries should be copied,
+//!   through [CopyOptions::filter].
 //!
 //! ## 0.2.0
-//! * `copy_tree` will create the immediate destination directory by default, but this can be
-//!   controlled by [CopyOptions::create_destination]. The destination, if created, is counted in
-//!   [CopyStats::dirs] and inherits its permissions from the source.
+//! * `copy_tree` will create the immediate destination directory by default,
+//!   but this can be controlled by [CopyOptions::create_destination]. The
+//!   destination, if created, is counted in [CopyStats::dirs] and inherits its
+//!   permissions from the source.
 //!
 //! ## 0.1.1
 //! * [Error] implements [std::error::Error] and [std::fmt::Display].
 //!
-//! * [Error] is tested to be compatible with
-//!   [Anyhow](https://docs.rs/anyhow). (There is only a dev-dependency on Anyhow; users of this
-//!   library won't pull it in.)
+//! * [Error] is tested to be compatible with [Anyhow](https://docs.rs/anyhow).
+//!   (There is only a dev-dependency on Anyhow; users of this library won't
+//!   pull it in.)
 //!
 //! ## 0.1.0
 //! * Initial release.
@@ -85,12 +103,14 @@ pub struct CopyOptions<'f> {
     copy_buffer_size: usize,
     create_destination: bool,
 
-    // I agree with Clippy that this is a complex type, but stable Rust seems
-    // to have no other way to spell it, because you can't make a type
-    // or trait
-    // alias for a Fn.
+    // I agree with Clippy that the callbacks are complex types, but stable Rust
+    // seems to have no other way to spell it, because you can't make a type or
+    // trait alias for a Fn.
     #[allow(clippy::type_complexity)]
     filter: Option<Box<dyn FnMut(&Path, &DirEntry) -> Result<bool> + 'f>>,
+
+    #[allow(clippy::type_complexity)]
+    after_entry_copied: Option<Box<dyn FnMut(&Path, &fs::FileType, &CopyStats) + 'f>>,
 }
 
 impl<'f> Default for CopyOptions<'f> {
@@ -99,6 +119,7 @@ impl<'f> Default for CopyOptions<'f> {
             copy_buffer_size: 8 << 20,
             create_destination: true,
             filter: None,
+            after_entry_copied: None,
         }
     }
 }
@@ -111,6 +132,7 @@ impl<'f> CopyOptions<'f> {
 
     /// Set the buffer size for copying regular files.
     pub fn copy_buffer_size(self, copy_buffer_size: usize) -> CopyOptions<'f> {
+        assert!(copy_buffer_size > 0);
         CopyOptions {
             copy_buffer_size,
             ..self
@@ -171,6 +193,22 @@ impl<'f> CopyOptions<'f> {
         }
     }
 
+    /// Set a progress callback that's called after each entry is successfully copied.
+    ///
+    /// The callback is passed:
+    /// * The path, relative to the top of the tree, that was just copied.
+    /// * The [std::fs::FileType] of the entry that was copied.
+    /// * The [stats](CopyStats) so far, including the number of files copied.
+    pub fn after_entry_copied<F>(self, after_entry_copied: F) -> CopyOptions<'f>
+    where
+        F: FnMut(&Path, &fs::FileType, &CopyStats) + 'f,
+    {
+        CopyOptions {
+            after_entry_copied: Some(Box::new(after_entry_copied)),
+            ..self
+        }
+    }
+
     /// Copy the tree according to the options.
     ///
     /// Returns [CopyStats] describing how many files were copied, etc.
@@ -207,26 +245,27 @@ impl<'f> CopyOptions<'f> {
                 }
                 let src_fullpath = src.join(&entry_subpath);
                 let dest_fullpath = dest.join(&entry_subpath);
-                match dir_entry.file_type().map_err(|io| Error {
+                let file_type = dir_entry.file_type().map_err(|io| Error {
                     path: src_fullpath.clone(),
                     io,
                     kind: ErrorKind::ReadDir,
-                })? {
-                    t if t.is_file() => {
-                        copy_file(&src_fullpath, &dest_fullpath, &mut copy_buf, &mut stats)?
-                    }
-                    t if t.is_dir() => {
-                        copy_dir(&src_fullpath, &dest_fullpath, &mut stats)?;
-                        subdir_queue.push_back(entry_subpath);
-                    }
-                    t if t.is_symlink() => copy_symlink(&src_fullpath, &dest_fullpath, &mut stats)?,
-                    t => {
-                        return Err(Error::new(
-                            ErrorKind::UnsupportedFileType,
-                            src_fullpath,
-                            format!("unsupported file type {:?}", t),
-                        ))
-                    }
+                })?;
+                if file_type.is_file() {
+                    copy_file(&src_fullpath, &dest_fullpath, &mut copy_buf, &mut stats)?
+                } else if file_type.is_dir() {
+                    copy_dir(&src_fullpath, &dest_fullpath, &mut stats)?;
+                    subdir_queue.push_back(entry_subpath.clone());
+                } else if file_type.is_symlink() {
+                    copy_symlink(&src_fullpath, &dest_fullpath, &mut stats)?
+                } else {
+                    return Err(Error::new(
+                        ErrorKind::UnsupportedFileType,
+                        src_fullpath,
+                        format!("unsupported file type {:?}", file_type),
+                    ));
+                }
+                if let Some(ref mut f) = self.after_entry_copied {
+                    f(&entry_subpath, &file_type, &stats);
                 }
             }
         }
@@ -235,7 +274,7 @@ impl<'f> CopyOptions<'f> {
 }
 
 /// Counters of how many things were copied.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct CopyStats {
     /// The number of plain files copied.
     pub files: usize,

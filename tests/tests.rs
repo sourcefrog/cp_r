@@ -4,7 +4,7 @@
 
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use cp_r::*;
 
@@ -221,18 +221,25 @@ fn filter_by_path() {
     );
 }
 
-#[test]
-fn filter_by_mut_closure() {
-    let src = tempfile::tempdir().unwrap();
-    let dest = tempfile::tempdir().unwrap();
+const AAA_CONTENT: &[u8] = b"some file content\n";
 
+fn setup_a_b_src() -> tempfile::TempDir {
+    let src = tempfile::tempdir().unwrap();
     fs::create_dir(&src.path().join("a")).unwrap();
     fs::create_dir(&src.path().join("b")).unwrap();
     fs::create_dir(&src.path().join("b/bb")).unwrap();
     fs::create_dir(&src.path().join("a").join("aa")).unwrap();
 
-    let file_content = b"some file content\n";
+    let file_content = AAA_CONTENT;
     fs::write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
+
+    src
+}
+
+#[test]
+fn filter_by_mut_closure() {
+    let src = setup_a_b_src();
+    let dest = tempfile::tempdir().unwrap();
 
     // Filter paths and also collect all the paths we've seen, as an example of a filter
     // that's more than a simple function pointer.
@@ -247,14 +254,14 @@ fn filter_by_mut_closure() {
 
     assert_eq!(
         fs::read(&dest.path().join("a/aa/aaafile")).unwrap(),
-        file_content
+        AAA_CONTENT,
     );
     assert!(!dest.path().join("b").exists());
     assert_eq!(
         stats,
         CopyStats {
             files: 1,
-            file_bytes: file_content.len() as u64,
+            file_bytes: AAA_CONTENT.len() as u64,
             dirs: 2,
             symlinks: 0,
             file_buffer_reads: 1,
@@ -269,4 +276,37 @@ fn filter_by_mut_closure() {
     // b's children are not visited.
     filter_seen_paths.sort_unstable();
     assert_eq!(filter_seen_paths, ["a", "a/aa", "a/aa/aaafile", "b"]);
+}
+
+#[test]
+fn after_entry_copied_callback() {
+    let src = setup_a_b_src();
+    let dest = tempfile::tempdir().unwrap();
+    let mut progress_seen: Vec<(PathBuf, fs::FileType)> = Vec::new();
+    let mut last_stats = CopyStats::default();
+
+    // We can't count on the entries being seen in any particular order, but there are other
+    // properties we can check...
+    let final_stats = CopyOptions::new()
+        .after_entry_copied(|p, ft, stats| {
+            assert!(
+                !progress_seen.iter().any(|(pp, _)| pp == p),
+                "filename has not been seen before"
+            );
+            progress_seen.push((p.to_owned(), ft.clone()));
+            if ft.is_file() {
+                assert_eq!(stats.files, last_stats.files + 1);
+            } else if ft.is_dir() {
+                assert_eq!(stats.dirs, last_stats.dirs + 1);
+            } else {
+                panic!("unexpected file type {:?}", ft);
+            }
+            last_stats = stats.clone();
+        })
+        .copy_tree(&src.path(), &dest.path())
+        .unwrap();
+    assert_eq!(
+        last_stats, final_stats,
+        "progress after the final copy include stats equal to the overall final stats"
+    );
 }
