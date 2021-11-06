@@ -37,7 +37,7 @@
 //!
 //! # Release history
 //!
-//! ## unreleased
+//! ## 0.3.0
 //!
 //! API changes:
 //!
