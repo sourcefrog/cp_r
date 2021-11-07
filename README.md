@@ -19,7 +19,7 @@ permissions, with minimal dependencies, and with clean error reporting.
 * Copies mtimes and permissions.
 * Takes an optional callback to decide which entries are copied or skipped,
   `CopyOptions::filter`.
-* Takes an optional callback to show progress or record which files are copied, 
+* Takes an optional callback to show progress or record which files are copied,
   `CopyOptions::after_entry_copied`.
 
 See the [docs](https://docs.rs/cp_r) for more information.
