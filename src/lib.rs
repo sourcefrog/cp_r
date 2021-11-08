@@ -44,7 +44,7 @@
 //!
 //! ## 0.3.1
 //!
-//! Unreleased
+//! Released 2021-11-07
 //!
 //! API changes:
 //!

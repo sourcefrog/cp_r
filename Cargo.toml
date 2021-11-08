@@ -1,6 +1,6 @@
 [package]
 name = "cp_r"
-version = "0.3.1-pre"
+version = "0.3.1"
 edition = "2018"
 authors = ["Martin Pool"]
 description = "Copy files and directories recursively, preserving mtime and permissions"
