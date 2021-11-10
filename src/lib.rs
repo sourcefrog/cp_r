@@ -42,6 +42,13 @@
 //!
 //! # Release history
 //!
+//! ## unreleased
+//!
+//! API changes:
+//!
+//! * Remove `copy_buffer_size`, `file_buffers_copied`: these are too niche to have in the public
+//!   API, and anyhow become meaningless when we use [std::fs::copy].
+//!
 //! ## 0.3.1
 //!
 //! Released 2021-11-07
@@ -95,17 +102,17 @@ use std::fs::{self, DirEntry};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
+const COPY_BUFFER_SIZE: usize = 1 << 20;
+
 /// Options for copying file trees.
 ///
 /// Default options may be OK for many callers:
 /// * Preserve mtime and permissions.
-/// * Use an 8MiB copy buffer.
 /// * Create the destination if it does not exist.
 pub struct CopyOptions<'f> {
     // TODO: Continue or stop on error?
     // TODO: Option controlling whether to copy mtimes?
     // TODO: Copy permissions?
-    copy_buffer_size: usize,
     create_destination: bool,
 
     // I agree with Clippy that the callbacks are complex types, but stable Rust
@@ -121,7 +128,6 @@ pub struct CopyOptions<'f> {
 impl<'f> Default for CopyOptions<'f> {
     fn default() -> CopyOptions<'f> {
         CopyOptions {
-            copy_buffer_size: 8 << 20,
             create_destination: true,
             filter: None,
             after_entry_copied: None,
@@ -133,15 +139,6 @@ impl<'f> CopyOptions<'f> {
     /// Construct reasonable default options.
     pub fn new() -> CopyOptions<'f> {
         CopyOptions::default()
-    }
-
-    /// Set the buffer size for copying regular files.
-    pub fn copy_buffer_size(self, copy_buffer_size: usize) -> CopyOptions<'f> {
-        assert!(copy_buffer_size > 0);
-        CopyOptions {
-            copy_buffer_size,
-            ..self
-        }
     }
 
     /// Set whether to create the destination if it does not exist (the default), or return an error.
@@ -226,8 +223,7 @@ impl<'f> CopyOptions<'f> {
 
         let mut subdir_queue: VecDeque<PathBuf> = VecDeque::new();
         subdir_queue.push_back(PathBuf::from(""));
-        assert!(self.copy_buffer_size > 0);
-        let mut copy_buf = vec![0u8; self.copy_buffer_size];
+        let mut copy_buf = vec![0u8; COPY_BUFFER_SIZE];
 
         while let Some(subdir) = subdir_queue.pop_front() {
             let subdir_full_path = src.join(&subdir);
@@ -289,10 +285,6 @@ pub struct CopyStats {
     pub symlinks: usize,
     /// The number of bytes of file content copied, across all files.
     pub file_bytes: u64,
-    /// The number of file buffers copied, per [CopyOptions::copy_buffer_size].
-    ///
-    /// (This is fairly obscure and mostly intended for testing.)
-    pub file_buffer_reads: usize,
     /// The number of entries filtered out by the [CopyOptions::filter] callback.
     pub filtered_out: usize,
 }
@@ -414,7 +406,6 @@ fn copy_file(src: &Path, dest: &Path, buf: &mut [u8], stats: &mut CopyStats) -> 
             break;
         }
         stats.file_bytes += len as u64;
-        stats.file_buffer_reads += 1;
         outf.write_all(&buf[..len]).map_err(|io| Error {
             kind: ErrorKind::WriteFile,
             path: dest.to_owned(),

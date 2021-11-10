@@ -25,38 +25,10 @@ fn basic_copy() {
     assert_eq!(fs::read(&dest_file_path).unwrap(), file_content);
     assert_eq!(stats.files, 1);
     assert_eq!(stats.file_bytes, file_content.len() as u64);
-    assert_eq!(stats.file_buffer_reads, 1);
 
     assert_eq!(
         fs::metadata(&dest_file_path).unwrap().modified().unwrap(),
         fs::metadata(&src_file_path).unwrap().modified().unwrap()
-    );
-}
-
-#[test]
-fn larger_file_with_small_buffer_causes_multiple_reads() {
-    let src = tempfile::tempdir().unwrap();
-    let dest = tempfile::tempdir().unwrap();
-    let file_content = b"some file content\n".repeat(1000);
-    let file_name = "a file";
-    let small_copy_buffer_size = 200;
-
-    fs::write(&src.path().join(file_name), &file_content).unwrap();
-
-    let stats = CopyOptions::new()
-        .copy_buffer_size(small_copy_buffer_size)
-        .copy_tree(src.path(), dest.path())
-        .unwrap();
-
-    assert_eq!(
-        fs::read(&dest.path().join(file_name)).unwrap(),
-        file_content
-    );
-    assert_eq!(stats.files, 1);
-    assert_eq!(stats.file_bytes, file_content.len() as u64);
-    assert_eq!(
-        stats.file_buffer_reads,
-        file_content.len() / small_copy_buffer_size,
     );
 }
 
@@ -176,7 +148,6 @@ fn copy_dangling_symlink() {
             dirs: 0,
             symlinks: 1,
             file_bytes: 0,
-            file_buffer_reads: 0,
             filtered_out: 0,
         }
     );
@@ -215,7 +186,6 @@ fn filter_by_path() {
             file_bytes: file_content.len() as u64,
             dirs: 2,
             symlinks: 0,
-            file_buffer_reads: 1,
             filtered_out: 1,
         }
     );
@@ -264,7 +234,6 @@ fn filter_by_mut_closure() {
             file_bytes: AAA_CONTENT.len() as u64,
             dirs: 2,
             symlinks: 0,
-            file_buffer_reads: 1,
             filtered_out: 1,
         }
     );
