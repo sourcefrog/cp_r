@@ -109,7 +109,7 @@
 use std::collections::VecDeque;
 use std::fmt;
 use std::fs::{self, DirEntry};
-use std::io::{self};
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// Options for copying file trees.
@@ -266,7 +266,7 @@ impl<'f> CopyOptions<'f> {
                     copy_symlink(&src_fullpath, &dest_fullpath, &mut stats)?
                 } else {
                     // TODO: Include the file type.
-                    return Err(Error::new(ErrorKind::UnsupportedFileType, &src_fullpath));
+                    return Err(Error::new(ErrorKind::UnsupportedFileType, src_fullpath));
                 }
                 if let Some(ref mut f) = self.after_entry_copied {
                     f(&entry_subpath, &file_type, &stats);
@@ -309,18 +309,24 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 impl Error {
     /// Construct a new error with no source.
-    pub fn new(kind: ErrorKind, path: &Path) -> Error {
+    pub fn new<P>(kind: ErrorKind, path: P) -> Error
+    where
+        P: Into<PathBuf>,
+    {
         Error {
-            path: path.to_owned(),
+            path: path.into(),
             kind,
             io: None,
         }
     }
 
     /// Construct a new error from a [std::io::Error].
-    pub fn from_io_error(io: io::Error, kind: ErrorKind, path: &Path) -> Error {
+    pub fn from_io_error<P>(io: io::Error, kind: ErrorKind, path: P) -> Error
+    where
+        P: Into<PathBuf>,
+    {
         Error {
-            path: path.to_owned(),
+            path: path.into(),
             kind,
             io: Some(io),
         }
