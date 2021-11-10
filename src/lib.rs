@@ -51,6 +51,11 @@
 //!
 //! * New [ErrorKind::DestinationDoesNotExist].
 //!
+//! Improvements:
+//!
+//! * Use [std::fs::copy], which is more efficient on Windows and macOS, and makes this crate
+//!   simpler.
+//!
 //! ## 0.3.1
 //!
 //! Released 2021-11-07
@@ -101,10 +106,8 @@
 use std::collections::VecDeque;
 use std::fmt;
 use std::fs::{self, DirEntry};
-use std::io::{self, Read, Write};
+use std::io::{self};
 use std::path::{Path, PathBuf};
-
-const COPY_BUFFER_SIZE: usize = 1 << 20;
 
 /// Options for copying file trees.
 ///
@@ -234,7 +237,6 @@ impl<'f> CopyOptions<'f> {
 
         let mut subdir_queue: VecDeque<PathBuf> = VecDeque::new();
         subdir_queue.push_back(PathBuf::from(""));
-        let mut copy_buf = vec![0u8; COPY_BUFFER_SIZE];
 
         while let Some(subdir) = subdir_queue.pop_front() {
             let subdir_full_path = src.join(&subdir);
@@ -263,7 +265,7 @@ impl<'f> CopyOptions<'f> {
                     kind: ErrorKind::ReadDir,
                 })?;
                 if file_type.is_file() {
-                    copy_file(&src_fullpath, &dest_fullpath, &mut copy_buf, &mut stats)?
+                    copy_file(&src_fullpath, &dest_fullpath, &mut stats)?
                 } else if file_type.is_dir() {
                     copy_dir(&src_fullpath, &dest_fullpath, &mut stats)?;
                     subdir_queue.push_back(entry_subpath.clone());
@@ -396,60 +398,29 @@ pub enum ErrorKind {
     DestinationDoesNotExist,
 }
 
-fn copy_file(src: &Path, dest: &Path, buf: &mut [u8], stats: &mut CopyStats) -> Result<()> {
-    let mut inf = fs::OpenOptions::new()
-        .read(true)
-        .open(src)
-        .map_err(|io| Error {
-            kind: ErrorKind::ReadFile,
-            path: src.to_owned(),
-            io,
-        })?;
-    let mut outf = fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(dest)
-        .map_err(|io| Error {
-            kind: ErrorKind::WriteFile,
-            path: dest.to_owned(),
-            io,
-        })?;
-    loop {
-        let len = inf.read(buf).map_err(|io| Error {
-            kind: ErrorKind::ReadFile,
-            path: src.to_owned(),
-            io,
-        })?;
-        if len == 0 {
-            break;
-        }
-        stats.file_bytes += len as u64;
-        outf.write_all(&buf[..len]).map_err(|io| Error {
-            kind: ErrorKind::WriteFile,
-            path: dest.to_owned(),
-            io,
-        })?;
-    }
+fn copy_file(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
+    // TODO: Optionally first check and error if the destination exists.
+    let bytes_copied = fs::copy(src, dest).map_err(|io| Error {
+        kind: ErrorKind::CopyFile,
+        path: src.to_owned(),
+        io,
+    })?;
+    stats.file_bytes += bytes_copied;
 
-    let inf_metadata = inf.metadata().map_err(|io| Error {
+    let inf_metadata = src.metadata().map_err(|io| Error {
         kind: ErrorKind::ReadFile,
         path: src.to_owned(),
         io,
     })?;
 
     let src_mtime = filetime::FileTime::from_last_modification_time(&inf_metadata);
-    filetime::set_file_handle_times(&outf, None, Some(src_mtime)).map_err(|io| Error {
+    filetime::set_file_mtime(&dest, src_mtime).map_err(|io| Error {
         kind: ErrorKind::WriteFile,
         path: dest.to_owned(),
         io,
     })?;
 
-    outf.set_permissions(inf_metadata.permissions())
-        .map_err(|io| Error {
-            kind: ErrorKind::WriteFile,
-            path: dest.to_owned(),
-            io,
-        })?;
+    // Permissions should have already been set by fs::copy.
 
     stats.files += 1;
     Ok(())
