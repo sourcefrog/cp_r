@@ -23,6 +23,7 @@
 //! * A callback that can decide whether to continue after an error.
 //! * Overwrite existing directories or files.
 //! * Copy single files: don't assume the source path is a directory.
+//! * A dry-run mode.
 //!
 //! # Example
 //!
