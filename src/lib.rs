@@ -20,8 +20,7 @@
 //! # Missing features that could be added
 //!
 //! * Options to _not_ copy mtimes or permissions.
-//! * Continue copying after an error.
-//! * Callbacks for progress or logging, error handling, etc.
+//! * A callback that can decide whether to continue after an error.
 //! * Overwrite existing directories or files.
 //! * Copy single files: don't assume the source path is a directory.
 //!
