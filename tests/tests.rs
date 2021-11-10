@@ -112,8 +112,11 @@ fn optionally_destination_must_exist() {
         .copy_tree(Path::new("src"), &dest)
         .unwrap_err();
     println!("err = {:#?}", err);
-    assert!(err.path().starts_with(&dest));
-    assert_eq!(err.kind(), ErrorKind::WriteFile);
+    assert_eq!(err.kind(), ErrorKind::DestinationDoesNotExist);
+    assert!(
+        err.path().starts_with(&dest),
+        "path in the error relates to the destination"
+    );
     assert_eq!(err.io_error().kind(), io::ErrorKind::NotFound);
 }
 

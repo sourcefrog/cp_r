@@ -49,6 +49,8 @@
 //! * Remove `copy_buffer_size`, `file_buffers_copied`: these are too niche to have in the public
 //!   API, and anyhow become meaningless when we use [std::fs::copy].
 //!
+//! * New [ErrorKind::DestinationDoesNotExist].
+//!
 //! ## 0.3.1
 //!
 //! Released 2021-11-07
@@ -217,8 +219,17 @@ impl<'f> CopyOptions<'f> {
     pub fn copy_tree(mut self, src: &Path, dest: &Path) -> Result<CopyStats> {
         let mut stats = CopyStats::default();
 
-        if self.create_destination && !dest.is_dir() {
-            copy_dir(src, dest, &mut stats)?;
+        // TODO: Handle the src not being a dir: copy that single entry.
+        if self.create_destination {
+            if !dest.is_dir() {
+                copy_dir(src, dest, &mut stats)?;
+            }
+        } else if !dest.is_dir() {
+            return Err(Error::new(
+                ErrorKind::DestinationDoesNotExist,
+                dest.to_owned(),
+                "destination does not exist".to_owned(),
+            ));
         }
 
         let mut subdir_queue: VecDeque<PathBuf> = VecDeque::new();
@@ -308,6 +319,7 @@ impl Error {
     pub fn new(kind: ErrorKind, path: PathBuf, message: String) -> Error {
         let io_kind: io::ErrorKind = match kind {
             ErrorKind::UnsupportedFileType => io::ErrorKind::Unsupported,
+            ErrorKind::DestinationDoesNotExist => io::ErrorKind::NotFound,
             other => unimplemented!("unhandled {:?}", other),
         };
         Error {
@@ -352,6 +364,8 @@ impl fmt::Display for Error {
             ReadSymlink => "reading symlink",
             CreateSymlink => "creating symlink",
             UnsupportedFileType => "unsupported file type",
+            CopyFile => "copying file",
+            DestinationDoesNotExist => "destination directory does not exist",
         };
         write!(f, "{}: {}: {}", kind_msg, self.path.display(), self.io)
     }
@@ -367,6 +381,8 @@ pub enum ErrorKind {
     ReadFile,
     /// Error creating or writing a destination file.
     WriteFile,
+    /// Error in copying a file: might be a read or write error.
+    CopyFile,
     /// Error creating a destination directory.
     CreateDir,
     /// Error reading a symlink.
@@ -376,6 +392,8 @@ pub enum ErrorKind {
     /// The source tree contains a type of file that this library can't copy, such as a Unix
     /// FIFO.
     UnsupportedFileType,
+    /// The destination directory does not exist.
+    DestinationDoesNotExist,
 }
 
 fn copy_file(src: &Path, dest: &Path, buf: &mut [u8], stats: &mut CopyStats) -> Result<()> {
