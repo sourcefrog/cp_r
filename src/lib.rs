@@ -51,6 +51,9 @@
 //!
 //! * New [ErrorKind::DestinationDoesNotExist].
 //!
+//! * [ErrorKind::io_error] returns `Option<io::Error>`: errors from this crate may not have a
+//!   direct `io::Error` source.
+//!
 //! Improvements:
 //!
 //! * Use [std::fs::copy], which is more efficient on Windows and macOS, and makes this crate
@@ -228,11 +231,7 @@ impl<'f> CopyOptions<'f> {
                 copy_dir(src, dest, &mut stats)?;
             }
         } else if !dest.is_dir() {
-            return Err(Error::new(
-                ErrorKind::DestinationDoesNotExist,
-                dest.to_owned(),
-                "destination does not exist".to_owned(),
-            ));
+            return Err(Error::new(ErrorKind::DestinationDoesNotExist, dest));
         }
 
         let mut subdir_queue: VecDeque<PathBuf> = VecDeque::new();
@@ -240,15 +239,11 @@ impl<'f> CopyOptions<'f> {
 
         while let Some(subdir) = subdir_queue.pop_front() {
             let subdir_full_path = src.join(&subdir);
-            for entry in fs::read_dir(&subdir_full_path).map_err(|io| Error {
-                path: subdir_full_path.clone(),
-                io,
-                kind: ErrorKind::ReadDir,
-            })? {
-                let dir_entry = entry.map_err(|io| Error {
-                    path: subdir_full_path.clone(),
-                    io,
-                    kind: ErrorKind::ReadDir,
+            for entry in fs::read_dir(&subdir_full_path)
+                .map_err(|io| Error::from_io_error(io, ErrorKind::ReadDir, &subdir_full_path))?
+            {
+                let dir_entry = entry.map_err(|io| {
+                    Error::from_io_error(io, ErrorKind::ReadDir, &subdir_full_path)
                 })?;
                 let entry_subpath = subdir.join(dir_entry.file_name());
                 if let Some(filter) = &mut self.filter {
@@ -259,11 +254,9 @@ impl<'f> CopyOptions<'f> {
                 }
                 let src_fullpath = src.join(&entry_subpath);
                 let dest_fullpath = dest.join(&entry_subpath);
-                let file_type = dir_entry.file_type().map_err(|io| Error {
-                    path: src_fullpath.clone(),
-                    io,
-                    kind: ErrorKind::ReadDir,
-                })?;
+                let file_type = dir_entry
+                    .file_type()
+                    .map_err(|io| Error::from_io_error(io, ErrorKind::ReadDir, &src_fullpath))?;
                 if file_type.is_file() {
                     copy_file(&src_fullpath, &dest_fullpath, &mut stats)?
                 } else if file_type.is_dir() {
@@ -272,11 +265,8 @@ impl<'f> CopyOptions<'f> {
                 } else if file_type.is_symlink() {
                     copy_symlink(&src_fullpath, &dest_fullpath, &mut stats)?
                 } else {
-                    return Err(Error::new(
-                        ErrorKind::UnsupportedFileType,
-                        src_fullpath,
-                        format!("unsupported file type {:?}", file_type),
-                    ));
+                    // TODO: Include the file type.
+                    return Err(Error::new(ErrorKind::UnsupportedFileType, &src_fullpath));
                 }
                 if let Some(ref mut f) = self.after_entry_copied {
                     f(&entry_subpath, &file_type, &stats);
@@ -309,7 +299,8 @@ pub struct CopyStats {
 #[derive(Debug)]
 pub struct Error {
     path: PathBuf,
-    io: io::Error,
+    /// The original IO error, if any.
+    io: Option<io::Error>,
     kind: ErrorKind,
 }
 
@@ -317,17 +308,21 @@ pub struct Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Error {
-    /// Construct a new error.
-    pub fn new(kind: ErrorKind, path: PathBuf, message: String) -> Error {
-        let io_kind: io::ErrorKind = match kind {
-            ErrorKind::UnsupportedFileType => io::ErrorKind::Unsupported,
-            ErrorKind::DestinationDoesNotExist => io::ErrorKind::NotFound,
-            other => unimplemented!("unhandled {:?}", other),
-        };
+    /// Construct a new error with no source.
+    pub fn new(kind: ErrorKind, path: &Path) -> Error {
         Error {
-            path,
+            path: path.to_owned(),
             kind,
-            io: io::Error::new(io_kind, message),
+            io: None,
+        }
+    }
+
+    /// Construct a new error from a [std::io::Error].
+    pub fn from_io_error(io: io::Error, kind: ErrorKind, path: &Path) -> Error {
+        Error {
+            path: path.to_owned(),
+            kind,
+            io: Some(io),
         }
     }
 
@@ -337,10 +332,9 @@ impl Error {
         &self.path
     }
 
-    /// The IO error that caused this error, or a description of this error as an IO error, if it
-    /// was not directly caused by one.
-    pub fn io_error(&self) -> &io::Error {
-        &self.io
+    /// The IO error that caused this error, if any.
+    pub fn io_error(&self) -> Option<&io::Error> {
+        self.io.as_ref()
     }
 
     /// The kind of error that occurred.
@@ -351,7 +345,11 @@ impl Error {
 
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.io)
+        if let Some(io) = &self.io {
+            Some(io)
+        } else {
+            None
+        }
     }
 }
 
@@ -369,7 +367,11 @@ impl fmt::Display for Error {
             CopyFile => "copying file",
             DestinationDoesNotExist => "destination directory does not exist",
         };
-        write!(f, "{}: {}: {}", kind_msg, self.path.display(), self.io)
+        if let Some(io) = &self.io {
+            write!(f, "{}: {}: {}", kind_msg, self.path.display(), io)
+        } else {
+            write!(f, "{}: {}", kind_msg, self.path.display())
+        }
     }
 }
 
@@ -400,54 +402,34 @@ pub enum ErrorKind {
 
 fn copy_file(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
     // TODO: Optionally first check and error if the destination exists.
-    let bytes_copied = fs::copy(src, dest).map_err(|io| Error {
-        kind: ErrorKind::CopyFile,
-        path: src.to_owned(),
-        io,
-    })?;
+    let bytes_copied =
+        fs::copy(src, dest).map_err(|io| Error::from_io_error(io, ErrorKind::CopyFile, src))?;
     stats.file_bytes += bytes_copied;
 
-    let inf_metadata = src.metadata().map_err(|io| Error {
-        kind: ErrorKind::ReadFile,
-        path: src.to_owned(),
-        io,
-    })?;
-
-    let src_mtime = filetime::FileTime::from_last_modification_time(&inf_metadata);
-    filetime::set_file_mtime(&dest, src_mtime).map_err(|io| Error {
-        kind: ErrorKind::WriteFile,
-        path: dest.to_owned(),
-        io,
-    })?;
+    let src_metadata = src
+        .metadata()
+        .map_err(|io| Error::from_io_error(io, ErrorKind::ReadFile, src))?;
+    let src_mtime = filetime::FileTime::from_last_modification_time(&src_metadata);
+    filetime::set_file_mtime(&dest, src_mtime)
+        .map_err(|io| Error::from_io_error(io, ErrorKind::WriteFile, dest))?;
 
     // Permissions should have already been set by fs::copy.
-
     stats.files += 1;
     Ok(())
 }
 
 fn copy_dir(_src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
     fs::create_dir(dest)
-        .map_err(|io| Error {
-            kind: ErrorKind::CreateDir,
-            path: dest.to_owned(),
-            io,
-        })
+        .map_err(|io| Error::from_io_error(io, ErrorKind::CreateDir, dest))
         .map(|()| stats.dirs += 1)
 }
 
 #[cfg(unix)]
 fn copy_symlink(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
-    let target = fs::read_link(src).map_err(|io| Error {
-        kind: ErrorKind::ReadSymlink,
-        path: src.to_owned(),
-        io,
-    })?;
-    std::os::unix::fs::symlink(target, dest).map_err(|io| Error {
-        kind: ErrorKind::CreateSymlink,
-        path: dest.to_owned(),
-        io,
-    })?;
+    let target =
+        fs::read_link(src).map_err(|io| Error::from_io_error(io, ErrorKind::ReadSymlink, src))?;
+    std::os::unix::fs::symlink(target, dest)
+        .map_err(|io| Error::from_io_error(io, ErrorKind::CreateSymlink, dest))?;
     stats.symlinks += 1;
     Ok(())
 }

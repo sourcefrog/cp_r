@@ -71,7 +71,7 @@ fn clean_error_on_nonexistent_source() {
     println!("err = {:#?}", err);
     assert!(err.path().starts_with("nothing"));
     assert_eq!(err.kind(), ErrorKind::ReadDir);
-    assert_eq!(err.io_error().kind(), io::ErrorKind::NotFound);
+    assert_eq!(err.io_error().unwrap().kind(), io::ErrorKind::NotFound);
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn optionally_destination_must_exist() {
         err.path().starts_with(&dest),
         "path in the error relates to the destination"
     );
-    assert_eq!(err.io_error().kind(), io::ErrorKind::NotFound);
+    assert!(err.io_error().is_none(), "no underlying io::Error");
 }
 
 #[cfg(unix)]
@@ -129,7 +129,7 @@ fn clean_error_failing_to_copy_devices() {
         .unwrap_err();
     println!("{:#?}", err);
     assert_eq!(err.kind(), ErrorKind::UnsupportedFileType);
-    assert_eq!(err.io_error().kind(), io::ErrorKind::Unsupported);
+    assert!(err.io_error().is_none(), "no underlying io::Error");
     assert!(err.path().strip_prefix("/dev/").is_ok());
     assert!(format!("{}", err).starts_with("unsupported file type: /dev/"));
 }
