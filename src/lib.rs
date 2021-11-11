@@ -54,6 +54,9 @@
 //! * [ErrorKind::io_error] returns `Option<io::Error>`: errors from this crate may not have a
 //!   direct `io::Error` source.
 //!
+//! * [CopyOptions::copy_tree] arguments are relaxed to `AsRef<Path>` so that they will accept
+//!   `&str`, `PathBuf`, `tempfile::TempDir`, etc.
+//!
 //! Improvements:
 //!
 //! * Use [std::fs::copy], which is more efficient on Windows and macOS, and makes this crate
@@ -222,7 +225,14 @@ impl<'f> CopyOptions<'f> {
     /// Copy the tree according to the options.
     ///
     /// Returns [CopyStats] describing how many files were copied, etc.
-    pub fn copy_tree(mut self, src: &Path, dest: &Path) -> Result<CopyStats> {
+    pub fn copy_tree<P, Q>(mut self, src: P, dest: Q) -> Result<CopyStats>
+    where
+        P: AsRef<Path>,
+        Q: AsRef<Path>,
+    {
+        let src = src.as_ref();
+        let dest = dest.as_ref();
+
         let mut stats = CopyStats::default();
 
         // TODO: Handle the src not being a dir: copy that single entry.

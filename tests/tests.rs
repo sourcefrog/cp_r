@@ -6,6 +6,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use tempfile::TempDir;
+
 use cp_r::*;
 
 #[test]
@@ -34,8 +36,8 @@ fn basic_copy() {
 
 #[test]
 fn subdirs() {
-    let src = tempfile::tempdir().unwrap();
-    let dest = tempfile::tempdir().unwrap();
+    let src = TempDir::new().unwrap();
+    let dest = TempDir::new().unwrap();
 
     fs::create_dir(&src.path().join("a")).unwrap();
     fs::create_dir(&src.path().join("b")).unwrap();
@@ -45,9 +47,9 @@ fn subdirs() {
     let file_content = b"some file content\n";
     fs::write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
 
-    let stats = CopyOptions::default()
-        .copy_tree(src.path(), dest.path())
-        .unwrap();
+    // Note here that we can just path a reference to the TempDirs without calling
+    // `.path()`, because they `AsRef` to a `Path`.
+    let stats = CopyOptions::default().copy_tree(&src, &dest).unwrap();
 
     assert_eq!(
         fs::read(&dest.path().join("a/aa/aaafile")).unwrap(),
@@ -65,9 +67,7 @@ fn subdirs() {
 #[test]
 fn clean_error_on_nonexistent_source() {
     let dest = tempfile::tempdir().unwrap();
-    let err = CopyOptions::new()
-        .copy_tree(Path::new("nothing"), &dest.path())
-        .unwrap_err();
+    let err = CopyOptions::new().copy_tree("nothing", &dest).unwrap_err();
     println!("err = {:#?}", err);
     assert!(err.path().starts_with("nothing"));
     assert_eq!(err.kind(), ErrorKind::ReadDir);
@@ -80,7 +80,7 @@ fn create_destination_by_default() {
     let dest_parent = tempfile::tempdir().unwrap();
     let dest = dest_parent.path().join("nonexistent_child");
     let stats = CopyOptions::new()
-        .copy_tree(&empty_src.path(), &dest)
+        .copy_tree(empty_src.path(), &dest)
         .unwrap();
     assert!(dest.is_dir());
     assert_eq!(stats.dirs, 1);
@@ -94,7 +94,7 @@ fn create_destination_when_requested() {
     let dest = dest_parent.path().join("nonexistent_child");
     let stats = CopyOptions::new()
         .create_destination(true)
-        .copy_tree(&empty_src.path(), &dest)
+        .copy_tree(&empty_src, &dest)
         .unwrap();
     assert!(dest.is_dir());
     assert_eq!(stats.dirs, 1);
@@ -109,7 +109,7 @@ fn optionally_destination_must_exist() {
     let dest = dest_parent.path().join("nonexistent_child");
     let err = CopyOptions::new()
         .create_destination(false)
-        .copy_tree(Path::new("src"), &dest)
+        .copy_tree("src", &dest)
         .unwrap_err();
     println!("err = {:#?}", err);
     assert_eq!(err.kind(), ErrorKind::DestinationDoesNotExist);
@@ -125,7 +125,7 @@ fn optionally_destination_must_exist() {
 fn clean_error_failing_to_copy_devices() {
     let dest = tempfile::tempdir().unwrap();
     let err = CopyOptions::new()
-        .copy_tree(&Path::new("/dev"), dest.path())
+        .copy_tree("/dev", &dest.path())
         .unwrap_err();
     println!("{:#?}", err);
     assert_eq!(err.kind(), ErrorKind::UnsupportedFileType);
@@ -265,7 +265,7 @@ fn after_entry_copied_callback() {
                 !progress_seen.iter().any(|(pp, _)| pp == p),
                 "filename has not been seen before"
             );
-            progress_seen.push((p.to_owned(), ft.clone()));
+            progress_seen.push((p.to_owned(), *ft));
             if ft.is_file() {
                 assert_eq!(stats.files, last_stats.files + 1);
             } else if ft.is_dir() {
@@ -275,7 +275,7 @@ fn after_entry_copied_callback() {
             }
             last_stats = stats.clone();
         })
-        .copy_tree(&src.path(), &dest.path())
+        .copy_tree(src.path(), dest.path())
         .unwrap();
     assert_eq!(
         last_stats, final_stats,
