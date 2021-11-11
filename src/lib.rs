@@ -59,8 +59,7 @@
 //!
 //! Improvements:
 //!
-//! * Use [std::fs::copy], which is more efficient on Windows and macOS, and makes this crate
-//!   simpler.
+//! * Use [std::fs::copy], which is more efficient, and makes this crate simpler.
 //!
 //! ## 0.3.1
 //!
