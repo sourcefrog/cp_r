@@ -360,6 +360,8 @@ impl Error {
 
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // It seems like you should be able to spell this like `self.io.as_ref().into()` but that
+        // doesn't work and I'm not sure why...
         if let Some(io) = &self.io {
             Some(io)
         } else {
