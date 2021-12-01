@@ -42,7 +42,9 @@
 //!
 //! # Release history
 //!
-//! ## unreleased
+//! ## 0.4.0
+//!
+//! Released 2021-11-30
 //!
 //! API changes:
 //!
