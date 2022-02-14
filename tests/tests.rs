@@ -128,10 +128,24 @@ fn clean_error_failing_to_copy_devices() {
         .copy_tree("/dev", &dest.path())
         .unwrap_err();
     println!("{:#?}", err);
-    assert_eq!(err.kind(), ErrorKind::UnsupportedFileType);
-    assert!(err.io_error().is_none(), "no underlying io::Error");
+    let kind = err.kind();
+    assert!(
+        kind == ErrorKind::UnsupportedFileType || kind == ErrorKind::CopyFile,
+        "unexpected ErrorKind {:?}",
+        kind
+    );
+    // Depending on OS peculiarities, we might detect this at different points, and therefore
+    // return different error kinds, and there may or may not be an ioerror.
     assert!(err.path().strip_prefix("/dev/").is_ok());
-    assert!(format!("{}", err).starts_with("unsupported file type: /dev/"));
+    let formatted = format!("{}", err);
+    assert!(
+        formatted.starts_with("unsupported file type: /dev/")
+            || formatted.contains(
+                "the source path is neither a regular file nor a symlink to a regular file"
+            ),
+        "unexpected string format: {:?}",
+        formatted
+    );
 }
 
 #[cfg(unix)]
