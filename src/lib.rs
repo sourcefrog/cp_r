@@ -154,6 +154,7 @@ impl<'f> CopyOptions<'f> {
     /// Set whether to create the destination if it does not exist (the default), or return an error.
     ///
     /// Only the immediate destination is created, not all its parents.
+    #[must_use]
     pub fn create_destination(self, create_destination: bool) -> CopyOptions<'f> {
         CopyOptions {
             create_destination,
@@ -195,6 +196,7 @@ impl<'f> CopyOptions<'f> {
     /// *Note:* Due to limitations in the current Rust compiler's type inference
     /// for closures, filter closures may give errors about lifetimes if they are
     /// assigned to to a variable rather than declared inline in the parameter.
+    #[must_use]
     pub fn filter<F>(self, filter: F) -> CopyOptions<'f>
     where
         F: FnMut(&Path, &DirEntry) -> Result<bool> + 'f,
@@ -211,6 +213,7 @@ impl<'f> CopyOptions<'f> {
     /// * The path, relative to the top of the tree, that was just copied.
     /// * The [std::fs::FileType] of the entry that was copied.
     /// * The [stats](CopyStats) so far, including the number of files copied.
+    #[must_use]
     pub fn after_entry_copied<F>(self, after_entry_copied: F) -> CopyOptions<'f>
     where
         F: FnMut(&Path, &fs::FileType, &CopyStats) + 'f,
