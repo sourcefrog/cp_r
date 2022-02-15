@@ -1,6 +1,6 @@
-// Copyright 2021 Martin Pool
+// Copyright 2021, 2022 Martin Pool
 
-//! Public API tests.
+//! Public API tests for `cp_r`.
 
 use std::fs;
 use std::io;
@@ -288,11 +288,44 @@ fn after_entry_copied_callback() {
                 panic!("unexpected file type {:?}", ft);
             }
             last_stats = stats.clone();
+            Ok(())
         })
         .copy_tree(src.path(), dest.path())
         .unwrap();
     assert_eq!(
         last_stats, final_stats,
         "progress after the final copy include stats equal to the overall final stats"
+    );
+}
+
+#[test]
+fn after_entry_callback_error_terminates_copy() {
+    let src = setup_a_b_src();
+    let dest = tempfile::tempdir().unwrap();
+
+    // Stop after copying one file. The order in which files are copied is not defined, but we should see
+    // exactly one in the result.
+    let options = CopyOptions::new().after_entry_copied(|p, ft, _stats| {
+        if ft.is_file() {
+            Err(Error::new(ErrorKind::Interrupted, p))
+        } else {
+            Ok(())
+        }
+    });
+    let result = options.copy_tree(src.path(), dest.path());
+
+    let err = result.unwrap_err();
+    let err_str = err.to_string();
+    assert!(
+        err_str.starts_with("interrupted"),
+        "unexpected err_str: {:?}",
+        err_str
+    );
+
+    let err_debug = format!("{:?}", err);
+    assert!(
+        err_debug.starts_with("Error") && err_debug.contains("kind: Interrupted"),
+        "unexpected err_debug: {:?}",
+        err_debug
     );
 }

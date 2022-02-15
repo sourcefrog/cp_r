@@ -1,4 +1,4 @@
-// Copyright 2021 Martin Pool
+// Copyright 2021, 2022 Martin Pool
 
 //! Copy a directory tree, including mtimes and permissions.
 //!
@@ -42,24 +42,33 @@
 //!
 //! # Release history
 //!
+//! ## 0.5.0
+//!
+//! Released 2022-02-15
+//!
+//! ### API changes
+//!
+//! * The callback passed to [CopyOptions::after_entry_copied] now returns `Result<()>`
+//!   (previously `()`), so it can return an Err to abort copying.
+//!
 //! ## 0.4.0
 //!
 //! Released 2021-11-30
 //!
-//! API changes:
+//! ### API changes
 //!
 //! * Remove `copy_buffer_size`, `file_buffers_copied`: these are too niche to have in the public
 //!   API, and anyhow become meaningless when we use [std::fs::copy].
 //!
 //! * New [ErrorKind::DestinationDoesNotExist].
 //!
-//! * [Error::io_error] returns `Option<io::Error>`: errors from this crate may not have a
-//!   direct `io::Error` source.
+//! * [Error::io_error] returns `Option<io::Error>` (previously just an `io::Error`):
+//!   errors from this crate may not have a direct `io::Error` source.
 //!
 //! * [CopyOptions::copy_tree] arguments are relaxed to `AsRef<Path>` so that they will accept
 //!   `&str`, `PathBuf`, `tempfile::TempDir`, etc.
 //!
-//! Improvements:
+//! ### Improvements
 //!
 //! * Use [std::fs::copy], which is more efficient, and makes this crate simpler.
 //!
@@ -67,12 +76,12 @@
 //!
 //! Released 2021-11-07
 //!
-//! API changes:
+//! ### API changes
 //!
 //! * [CopyOptions::copy_tree] consumes `self` (rather than taking `&mut self`),
 //!   which reduces lifetime issues in accessing values owned by callbacks.
 //!
-//! New features:
+//! ### New features
 //!
 //! * [CopyOptions::after_entry_copied] callback added, which can be used for
 //!   example to draw a progress bar.
@@ -81,14 +90,14 @@
 //!
 //! Released 2021-11-06
 //!
-//! API changes:
+//! ### API changes
 //!
 //! * [CopyOptions] builder functions now return `self` rather than `&mut self`.
 //! * The actual copy operation is run by calling [CopyOptions::copy_tree],
 //!   rather than passing the options as a parameter to `copy_tree`.
 //! * Rename `with_copy_buffer_size` to `copy_buffer_size`.
 //!
-//! New features:
+//! ### New features
 //! * A new option to provide a filter on which entries should be copied,
 //!   through [CopyOptions::filter].
 //!
@@ -134,7 +143,7 @@ pub struct CopyOptions<'f> {
     filter: Option<Box<dyn FnMut(&Path, &DirEntry) -> Result<bool> + 'f>>,
 
     #[allow(clippy::type_complexity)]
-    after_entry_copied: Option<Box<dyn FnMut(&Path, &fs::FileType, &CopyStats) + 'f>>,
+    after_entry_copied: Option<Box<dyn FnMut(&Path, &fs::FileType, &CopyStats) -> Result<()> + 'f>>,
 }
 
 impl<'f> Default for CopyOptions<'f> {
@@ -215,10 +224,13 @@ impl<'f> CopyOptions<'f> {
     /// * The path, relative to the top of the tree, that was just copied.
     /// * The [std::fs::FileType] of the entry that was copied.
     /// * The [stats](CopyStats) so far, including the number of files copied.
+    ///
+    /// If the callback returns an error, it will abort the copy and the same
+    /// error will be returned from [CopyOptions::copy_tree].
     #[must_use]
     pub fn after_entry_copied<F>(self, after_entry_copied: F) -> CopyOptions<'f>
     where
-        F: FnMut(&Path, &fs::FileType, &CopyStats) + 'f,
+        F: FnMut(&Path, &fs::FileType, &CopyStats) -> Result<()> + 'f,
     {
         CopyOptions {
             after_entry_copied: Some(Box::new(after_entry_copied)),
@@ -283,7 +295,7 @@ impl<'f> CopyOptions<'f> {
                     return Err(Error::new(ErrorKind::UnsupportedFileType, src_fullpath));
                 }
                 if let Some(ref mut f) = self.after_entry_copied {
-                    f(&entry_subpath, &file_type, &stats);
+                    f(&entry_subpath, &file_type, &stats)?;
                 }
             }
         }
@@ -388,6 +400,7 @@ impl fmt::Display for Error {
             UnsupportedFileType => "unsupported file type",
             CopyFile => "copying file",
             DestinationDoesNotExist => "destination directory does not exist",
+            Interrupted => "interrupted",
         };
         if let Some(io) = &self.io {
             write!(f, "{}: {}: {}", kind_msg, self.path.display(), io)
@@ -420,6 +433,11 @@ pub enum ErrorKind {
     UnsupportedFileType,
     /// The destination directory does not exist.
     DestinationDoesNotExist,
+    /// The copy was interrupted by the user.
+    ///
+    /// This is not currently generated internally by `cp_r` but can be returned
+    /// by a callback.
+    Interrupted,
 }
 
 fn copy_file(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
