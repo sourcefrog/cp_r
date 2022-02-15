@@ -42,7 +42,9 @@
 //!
 //! # Release history
 //!
-//! ## unreleased
+//! ## 0.4.0
+//!
+//! Released 2021-11-30
 //!
 //! API changes:
 //!
@@ -51,7 +53,7 @@
 //!
 //! * New [ErrorKind::DestinationDoesNotExist].
 //!
-//! * [ErrorKind::io_error] returns `Option<io::Error>`: errors from this crate may not have a
+//! * [Error::io_error] returns `Option<io::Error>`: errors from this crate may not have a
 //!   direct `io::Error` source.
 //!
 //! * [CopyOptions::copy_tree] arguments are relaxed to `AsRef<Path>` so that they will accept
@@ -307,7 +309,7 @@ pub struct CopyStats {
 /// An error from copying a tree.
 ///
 /// At present this library does not support continuing after an error, so only the first error is
-/// returned.
+/// returned by [CopyOptions::copy_tree].
 #[derive(Debug)]
 pub struct Error {
     path: PathBuf,
@@ -316,7 +318,7 @@ pub struct Error {
     kind: ErrorKind,
 }
 
-/// A [std::result::Result] possibly containing a cp_r [Error].
+/// A [std::result::Result] possibly containing a `cp_r` [Error].
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Error {
