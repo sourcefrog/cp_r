@@ -1,6 +1,6 @@
 [package]
 name = "cp_r"
-version = "0.5.0"
+version = "0.5.1-pre"
 edition = "2018"
 authors = ["Martin Pool"]
 description = "Copy files and directories recursively, preserving mtime and permissions"
@@ -12,5 +12,5 @@ categories = ["filesystem"]
 filetime = "0.2"
 
 [dev-dependencies]
-anyhow = "1.0"  # to test attaching context
+anyhow = "1.0"   # to test attaching context
 tempfile = "3.2"

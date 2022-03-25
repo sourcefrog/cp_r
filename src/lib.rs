@@ -42,6 +42,13 @@
 //!
 //! # Release history
 //!
+//! ## 0.5.1
+//!
+//! Not released yet.
+//!
+//! * Change: Ignore errors when trying to set the mtime on copied files. This can
+//!   happen on Windows if the file is read-only.
+//!
 //! ## 0.5.0
 //!
 //! Released 2022-02-15
@@ -450,8 +457,8 @@ fn copy_file(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
         .metadata()
         .map_err(|io| Error::from_io_error(io, ErrorKind::ReadFile, src))?;
     let src_mtime = filetime::FileTime::from_last_modification_time(&src_metadata);
-    filetime::set_file_mtime(&dest, src_mtime)
-        .map_err(|io| Error::from_io_error(io, ErrorKind::WriteFile, dest))?;
+    // It's OK if we can't set the mtime.
+    let _ = filetime::set_file_mtime(&dest, src_mtime);
 
     // Permissions should have already been set by fs::copy.
     stats.files += 1;
