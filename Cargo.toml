@@ -7,6 +7,16 @@ description = "Copy files and directories recursively, preserving mtime and perm
 license = "MIT"
 repository = "https://github.com/sourcefrog/cp_r"
 categories = ["filesystem"]
+keywords = [
+    "copy",
+    "cp",
+    "directory",
+    "filesystem",
+    "mtime",
+    "permissions",
+    "recursive",
+    "tree",
+]
 
 [dependencies]
 filetime = "0.2"
