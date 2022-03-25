@@ -44,7 +44,7 @@
 //!
 //! ## 0.5.1
 //!
-//! Not released yet.
+//! Released 2022-03-24.
 //!
 //! * Change: Ignore errors when trying to set the mtime on copied files. This can
 //!   happen on Windows if the file is read-only.
