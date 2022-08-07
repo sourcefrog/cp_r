@@ -1,6 +1,6 @@
 [package]
 name = "cp_r"
-version = "0.5.1"
+version = "0.6.0-pre"
 edition = "2018"
 authors = ["Martin Pool"]
 description = "Copy files and directories recursively, preserving mtime and permissions"
@@ -11,6 +11,7 @@ keywords = ["copy", "directory", "filesystem", "permissions", "recursive"]
 
 [dependencies]
 filetime = "0.2"
+fs_at = { version = "0.0.1-alpha1", git = "https://github.com/rbtcollins/fs_at" }
 
 [dev-dependencies]
 anyhow = "1.0"   # to test attaching context

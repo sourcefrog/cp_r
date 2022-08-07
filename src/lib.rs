@@ -7,7 +7,8 @@
 //!
 //! # Features
 //!
-//! * Minimal dependencies: currently just `filetime` to support copying mtimes.
+//! * Few dependencies: currently just `filetime` to support copying mtimes,
+//!   and `fs_at` to reduce path traversal.
 //! * Returns [CopyStats] describing how much data and how many files were
 //!   copied.
 //! * Tested on Linux, macOS and Windows.
@@ -41,6 +42,12 @@
 //! ```
 //!
 //! # Release history
+//!
+//! ## 0.6.0
+//!
+//! UNRELEASED
+//!
+//! * Experimental support for `fs_at` to open files.
 //!
 //! ## 0.5.1
 //!
@@ -126,7 +133,6 @@
 
 #![warn(missing_docs)]
 
-use std::collections::VecDeque;
 use std::fmt;
 use std::fs::{self, DirEntry};
 use std::io;
@@ -255,6 +261,29 @@ impl<'f> CopyOptions<'f> {
     {
         let src = src.as_ref();
         let dest = dest.as_ref();
+        // This version of the copy code prepares to use `fs_at` to open entries
+        // relative to their containing directory. We expect that this has a
+        // significant performance advantage, mostly due to not making the
+        // kernel do so much work traversing the paths repeatedly including
+        // checking permissions at every step.
+        //
+        // However this does need some care that we don't accumulate too many
+        // open file descriptors on directories, even for trees that are very
+        // deep and/or wide.
+        //
+        // The basic approach is that we have a stack of open directory handles,
+        // one at each level down into the tree. Each directory is an iterator
+        // of children, with the position of the iterator maintained by the
+        // `fs_at` crate and the kernel.
+        //
+        // On each step we attempt to read one more element from the bottom-most
+        // open directory. If we've reached the end, that's great, we're done
+        // and we can pop it. If it's a child directory, then we open it, create
+        // it in the destination, and push it onto the stack. For entries other
+        // than directories, we copy them directly.
+        //
+        // This code does not _actually_ use fs_at yet, because it does not yet
+        // expose the file type, or readlink, or lstatat.
 
         let mut stats = CopyStats::default();
 
@@ -267,47 +296,59 @@ impl<'f> CopyOptions<'f> {
             return Err(Error::new(ErrorKind::DestinationDoesNotExist, dest));
         }
 
-        let mut subdir_queue: VecDeque<PathBuf> = VecDeque::new();
-        subdir_queue.push_back(PathBuf::from(""));
+        // A stack of directories currently in flight. For each, the path from
+        // the top of the tree, and then the open ReadDir iterator.
+        let mut dir_stack: Vec<(PathBuf, fs::ReadDir)> = Vec::new();
+        dir_stack.push((PathBuf::from(""), read_dir(src)?));
 
-        while let Some(subdir) = subdir_queue.pop_front() {
-            let subdir_full_path = src.join(&subdir);
-            for entry in fs::read_dir(&subdir_full_path)
-                .map_err(|io| Error::from_io_error(io, ErrorKind::ReadDir, &subdir_full_path))?
-            {
-                let dir_entry = entry.map_err(|io| {
-                    Error::from_io_error(io, ErrorKind::ReadDir, &subdir_full_path)
-                })?;
-                let entry_subpath = subdir.join(dir_entry.file_name());
-                if let Some(filter) = &mut self.filter {
-                    if !filter(&entry_subpath, &dir_entry)? {
-                        stats.filtered_out += 1;
-                        continue;
+        while !dir_stack.is_empty() {
+            let (subdir, dir_iter) = dir_stack.last_mut().unwrap();
+            match dir_iter.next() {
+                None => {
+                    dir_stack.pop();
+                }
+                Some(Ok(dir_entry)) => {
+                    match dir_entry.file_name().to_str() {
+                        Some(".") | Some("..") => continue, // fs_at returns these
+                        _ => (),
+                    }
+                    let entry_subpath = subdir.join(dir_entry.file_name());
+                    if let Some(filter) = &mut self.filter {
+                        if !filter(&entry_subpath, &dir_entry)? {
+                            stats.filtered_out += 1;
+                            continue;
+                        }
+                    }
+                    let src_fullpath = src.join(&entry_subpath);
+                    let dest_fullpath = dest.join(&entry_subpath);
+                    let file_type = dir_entry.file_type().map_err(|io| {
+                        Error::from_io_error(io, ErrorKind::ReadDir, &src_fullpath)
+                    })?;
+                    if file_type.is_file() {
+                        copy_file(&src_fullpath, &dest_fullpath, &mut stats)?
+                    } else if file_type.is_dir() {
+                        copy_dir(&src_fullpath, &dest_fullpath, &mut stats)?;
+                        dir_stack.push((entry_subpath.clone(), read_dir(&src_fullpath)?));
+                    } else if file_type.is_symlink() {
+                        copy_symlink(&src_fullpath, &dest_fullpath, &mut stats)?
+                    } else {
+                        return Err(Error::new(ErrorKind::UnsupportedFileType, src_fullpath));
+                    }
+                    if let Some(ref mut f) = self.after_entry_copied {
+                        f(&entry_subpath, &file_type, &stats)?;
                     }
                 }
-                let src_fullpath = src.join(&entry_subpath);
-                let dest_fullpath = dest.join(&entry_subpath);
-                let file_type = dir_entry
-                    .file_type()
-                    .map_err(|io| Error::from_io_error(io, ErrorKind::ReadDir, &src_fullpath))?;
-                if file_type.is_file() {
-                    copy_file(&src_fullpath, &dest_fullpath, &mut stats)?
-                } else if file_type.is_dir() {
-                    copy_dir(&src_fullpath, &dest_fullpath, &mut stats)?;
-                    subdir_queue.push_back(entry_subpath.clone());
-                } else if file_type.is_symlink() {
-                    copy_symlink(&src_fullpath, &dest_fullpath, &mut stats)?
-                } else {
-                    // TODO: Include the file type.
-                    return Err(Error::new(ErrorKind::UnsupportedFileType, src_fullpath));
-                }
-                if let Some(ref mut f) = self.after_entry_copied {
-                    f(&entry_subpath, &file_type, &stats)?;
+                Some(Err(io_err)) => {
+                    return Err(Error::from_io_error(io_err, ErrorKind::ReadDir, &subdir));
                 }
             }
         }
         Ok(stats)
     }
+}
+
+fn read_dir(path: &Path) -> Result<fs::ReadDir> {
+    fs::read_dir(&path).map_err(|io| Error::from_io_error(io, ErrorKind::ReadDir, &path))
 }
 
 /// Counters of how many things were copied.
