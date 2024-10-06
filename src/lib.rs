@@ -42,6 +42,10 @@
 //!
 //! # Release history
 //!
+//! ## Unreleased
+//!
+//! * New: Copy symlinks on Windows.
+//!
 //! ## 0.5.1
 //!
 //! Released 2022-03-24.
