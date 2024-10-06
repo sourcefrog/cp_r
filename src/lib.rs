@@ -1,4 +1,4 @@
-// Copyright 2021, 2022 Martin Pool
+// Copyright 2021-2024 Martin Pool
 
 //! Copy a directory tree, including mtimes and permissions.
 //!
@@ -482,6 +482,19 @@ fn copy_symlink(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
 }
 
 #[cfg(windows)]
-fn copy_symlink(_src: &Path, _dest: &Path, _stats: &mut CopyStats) -> Result<()> {
-    unimplemented!("symlinks are not yet supported on Windows");
+fn copy_symlink(src: &Path, dest: &Path, _stats: &mut CopyStats) -> Result<()> {
+    use std::fs::{read_link, symlink_metadata};
+    let target =
+        read_link(src).map_err(|io| Error::from_io_error(io, ErrorKind::ReadSymlink, src))?;
+    let target = src.parent().unwrap().join(target);
+    let target_meta = symlink_metadata(&target)
+        .map_err(|io| Error::from_io_error(io, ErrorKind::ReadSymlink, &target))?;
+    if target_meta.file_type().is_dir() {
+        std::os::windows::fs::symlink_dir(target, dest)
+            .map_err(|io| Error::from_io_error(io, ErrorKind::CreateSymlink, dest))?;
+    } else {
+        std::os::windows::fs::symlink_file(target, dest)
+            .map_err(|io| Error::from_io_error(io, ErrorKind::CreateSymlink, dest))?;
+    }
+    Ok(())
 }
