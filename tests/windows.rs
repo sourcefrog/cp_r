@@ -21,6 +21,6 @@ fn copy_file_symlink() {
     assert_eq!(read_to_string(dest.path().join("link")).unwrap(), "hello");
     assert_eq!(
         read_link(&dest.path().join("link")).unwrap(),
-        Path::new("target")
+        dest.path().join("target")
     );
 }
