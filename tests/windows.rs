@@ -32,7 +32,7 @@ fn copy_dir_symlink() {
     let dest = dest_tmp.path();
     CopyOptions::new().copy_tree(&src, &dest).unwrap();
 
-    assert!(symlink_metadata(dest.join("link")).unwrap().is_dir());
+    assert!(symlink_metadata(dest.join("link")).unwrap().is_symlink());
     assert!(metadata(dest.join("link")).unwrap().is_dir());
     assert_eq!(read_link(dest.join("link")).unwrap(), dest.join("target"));
 }
