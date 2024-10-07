@@ -46,6 +46,8 @@
 //!
 //! * New: Copy symlinks on Windows.
 //!
+//! * New: Declared and tested MSRV of 1.63.
+//!
 //! ## 0.5.1
 //!
 //! Released 2022-03-24.

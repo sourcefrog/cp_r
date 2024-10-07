@@ -8,9 +8,10 @@ license = "MIT"
 repository = "https://github.com/sourcefrog/cp_r"
 categories = ["filesystem"]
 keywords = ["copy", "directory", "filesystem", "permissions", "recursive"]
+rust-version = "1.63"
 
 [dependencies]
-filetime = "0.2"
+filetime = "0.2.6"
 
 [dev-dependencies]
 anyhow = "1.0"   # to test attaching context
