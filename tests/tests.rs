@@ -1,4 +1,4 @@
-// Copyright 2021, 2022, 2024 Martin Pool
+// Copyright 2021-2024 Martin Pool
 
 //! Public API tests for `cp_r`.
 
@@ -47,10 +47,10 @@ fn subdirs() {
     let src = TempDir::new().unwrap();
     let dest = TempDir::new().unwrap();
 
-    create_dir(&src.path().join("a")).unwrap();
-    create_dir(&src.path().join("b")).unwrap();
-    create_dir(&src.path().join("b/bb")).unwrap();
-    create_dir(&src.path().join("a").join("aa")).unwrap();
+    create_dir(src.path().join("a")).unwrap();
+    create_dir(src.path().join("a").join("aa")).unwrap();
+    create_dir(src.path().join("b")).unwrap();
+    create_dir(src.path().join("b/bb")).unwrap();
 
     let file_content = b"some file content\n";
     write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
@@ -189,7 +189,7 @@ fn filter_by_path() {
     create_dir(&src.path().join("a").join("aa")).unwrap();
 
     let file_content = b"some file content\n";
-    write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
+    write(src.path().join("a/aa/aaafile"), file_content).unwrap();
 
     fn not_b(path: &Path, _: &DirEntry) -> cp_r::Result<bool> {
         Ok(path != Path::new("b"))
@@ -200,7 +200,7 @@ fn filter_by_path() {
         .unwrap();
 
     assert_eq!(
-        read(&dest.path().join("a/aa/aaafile")).unwrap(),
+        read(dest.path().join("a/aa/aaafile")).unwrap(),
         file_content
     );
     assert!(!dest.path().join("b").exists());
@@ -220,13 +220,13 @@ const AAA_CONTENT: &[u8] = b"some file content\n";
 
 fn setup_a_b_src() -> tempfile::TempDir {
     let src = tempfile::tempdir().unwrap();
-    create_dir(&src.path().join("a")).unwrap();
-    create_dir(&src.path().join("b")).unwrap();
-    create_dir(&src.path().join("b/bb")).unwrap();
-    create_dir(&src.path().join("a").join("aa")).unwrap();
+    create_dir(src.path().join("a")).unwrap();
+    create_dir(src.path().join("b")).unwrap();
+    create_dir(src.path().join("b/bb")).unwrap();
+    create_dir(src.path().join("a").join("aa")).unwrap();
 
     let file_content = AAA_CONTENT;
-    write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
+    write(src.path().join("a/aa/aaafile"), file_content).unwrap();
 
     src
 }
@@ -247,10 +247,7 @@ fn filter_by_mut_closure() {
         .copy_tree(src.path(), dest.path())
         .unwrap();
 
-    assert_eq!(
-        read(&dest.path().join("a/aa/aaafile")).unwrap(),
-        AAA_CONTENT,
-    );
+    assert_eq!(read(dest.path().join("a/aa/aaafile")).unwrap(), AAA_CONTENT,);
     assert!(!dest.path().join("b").exists());
     assert_eq!(
         stats,
