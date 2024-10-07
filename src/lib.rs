@@ -35,7 +35,7 @@
 //! // Copy this crate's `src` directory.
 //! let dest = tempfile::tempdir().unwrap();
 //! let stats = CopyOptions::new().copy_tree(Path::new("src"), dest.path()).unwrap();
-//! assert_eq!(stats.files, 1, "only one file in src");
+//! assert_eq!(stats.files, 2);
 //! assert_eq!(stats.dirs, 0, "no children");
 //! assert_eq!(stats.symlinks, 0, "no symlinks");
 //! ```
@@ -135,6 +135,12 @@ use std::fmt;
 use std::fs::{self, DirEntry};
 use std::io;
 use std::path::{Path, PathBuf};
+
+#[cfg(windows)]
+mod windows;
+
+#[cfg(windows)]
+use windows::copy_symlink;
 
 /// Options for copying file trees.
 ///
@@ -482,23 +488,5 @@ fn copy_symlink(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
     std::os::unix::fs::symlink(target, dest)
         .map_err(|io| Error::from_io_error(io, ErrorKind::CreateSymlink, dest))?;
     stats.symlinks += 1;
-    Ok(())
-}
-
-#[cfg(windows)]
-fn copy_symlink(src: &Path, dest: &Path, _stats: &mut CopyStats) -> Result<()> {
-    use std::fs::{read_link, symlink_metadata};
-    let target =
-        read_link(src).map_err(|io| Error::from_io_error(io, ErrorKind::ReadSymlink, src))?;
-    let target = src.parent().unwrap().join(target);
-    let target_meta = symlink_metadata(&target)
-        .map_err(|io| Error::from_io_error(io, ErrorKind::ReadSymlink, &target))?;
-    if target_meta.file_type().is_dir() {
-        std::os::windows::fs::symlink_dir(target, dest)
-            .map_err(|io| Error::from_io_error(io, ErrorKind::CreateSymlink, dest))?;
-    } else {
-        std::os::windows::fs::symlink_file(target, dest)
-            .map_err(|io| Error::from_io_error(io, ErrorKind::CreateSymlink, dest))?;
-    }
     Ok(())
 }

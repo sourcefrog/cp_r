@@ -14,4 +14,4 @@ filetime = "0.2"
 
 [dev-dependencies]
 anyhow = "1.0"   # to test attaching context
-tempfile = "3.2"
+tempfile = "3.8"
