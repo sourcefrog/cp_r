@@ -1,8 +1,8 @@
-// Copyright 2021, 2022 Martin Pool
+// Copyright 2021, 2022, 2024 Martin Pool
 
 //! Public API tests for `cp_r`.
 
-use std::fs;
+use std::fs::{create_dir, metadata, read, write, DirEntry, FileType};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -17,21 +17,24 @@ fn basic_copy() {
     let file_content = b"hello world\n";
     let file_name = "a file";
     let src_file_path = src.path().join(file_name);
-    fs::write(&src_file_path, file_content).unwrap();
+    write(&src_file_path, file_content).unwrap();
 
     let stats = CopyOptions::default()
         .copy_tree(src.path(), dest.path())
         .unwrap();
 
     let dest_file_path = &dest.path().join(file_name);
-    assert_eq!(fs::read(&dest_file_path).unwrap(), file_content);
+    assert_eq!(read(&dest_file_path).unwrap(), file_content);
     assert_eq!(stats.files, 1);
     assert_eq!(stats.file_bytes, file_content.len() as u64);
 
-    assert_eq!(
-        fs::metadata(&dest_file_path).unwrap().modified().unwrap(),
-        fs::metadata(&src_file_path).unwrap().modified().unwrap()
-    );
+    let src_mtime = metadata(&src_file_path).unwrap().modified().unwrap();
+    let dest_mtime = metadata(&dest_file_path).unwrap().modified().unwrap();
+    dbg!(src_mtime, dest_mtime);
+
+    // Filesystems might not retain perfect resolution on mtimes, but they should at least be
+    // within 1ms everywhere(?)
+    assert!((src_mtime - dest_mtime).as_millis_f64() < 1.0);
 }
 
 #[test]
@@ -39,23 +42,23 @@ fn subdirs() {
     let src = TempDir::new().unwrap();
     let dest = TempDir::new().unwrap();
 
-    fs::create_dir(&src.path().join("a")).unwrap();
-    fs::create_dir(&src.path().join("b")).unwrap();
-    fs::create_dir(&src.path().join("b/bb")).unwrap();
-    fs::create_dir(&src.path().join("a").join("aa")).unwrap();
+    create_dir(&src.path().join("a")).unwrap();
+    create_dir(&src.path().join("b")).unwrap();
+    create_dir(&src.path().join("b/bb")).unwrap();
+    create_dir(&src.path().join("a").join("aa")).unwrap();
 
     let file_content = b"some file content\n";
-    fs::write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
+    write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
 
     // Note here that we can just path a reference to the TempDirs without calling
     // `.path()`, because they `AsRef` to a `Path`.
     let stats = CopyOptions::default().copy_tree(&src, &dest).unwrap();
 
     assert_eq!(
-        fs::read(&dest.path().join("a/aa/aaafile")).unwrap(),
+        read(&dest.path().join("a/aa/aaafile")).unwrap(),
         file_content
     );
-    assert!(fs::metadata(&dest.path().join("b/bb"))
+    assert!(metadata(&dest.path().join("b/bb"))
         .unwrap()
         .file_type()
         .is_dir());
@@ -175,15 +178,15 @@ fn filter_by_path() {
     let src = tempfile::tempdir().unwrap();
     let dest = tempfile::tempdir().unwrap();
 
-    fs::create_dir(&src.path().join("a")).unwrap();
-    fs::create_dir(&src.path().join("b")).unwrap();
-    fs::create_dir(&src.path().join("b/bb")).unwrap();
-    fs::create_dir(&src.path().join("a").join("aa")).unwrap();
+    create_dir(&src.path().join("a")).unwrap();
+    create_dir(&src.path().join("b")).unwrap();
+    create_dir(&src.path().join("b/bb")).unwrap();
+    create_dir(&src.path().join("a").join("aa")).unwrap();
 
     let file_content = b"some file content\n";
-    fs::write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
+    write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
 
-    fn not_b(path: &Path, _: &fs::DirEntry) -> cp_r::Result<bool> {
+    fn not_b(path: &Path, _: &DirEntry) -> cp_r::Result<bool> {
         Ok(path != Path::new("b"))
     }
     let stats = CopyOptions::new()
@@ -192,7 +195,7 @@ fn filter_by_path() {
         .unwrap();
 
     assert_eq!(
-        fs::read(&dest.path().join("a/aa/aaafile")).unwrap(),
+        read(&dest.path().join("a/aa/aaafile")).unwrap(),
         file_content
     );
     assert!(!dest.path().join("b").exists());
@@ -212,13 +215,13 @@ const AAA_CONTENT: &[u8] = b"some file content\n";
 
 fn setup_a_b_src() -> tempfile::TempDir {
     let src = tempfile::tempdir().unwrap();
-    fs::create_dir(&src.path().join("a")).unwrap();
-    fs::create_dir(&src.path().join("b")).unwrap();
-    fs::create_dir(&src.path().join("b/bb")).unwrap();
-    fs::create_dir(&src.path().join("a").join("aa")).unwrap();
+    create_dir(&src.path().join("a")).unwrap();
+    create_dir(&src.path().join("b")).unwrap();
+    create_dir(&src.path().join("b/bb")).unwrap();
+    create_dir(&src.path().join("a").join("aa")).unwrap();
 
     let file_content = AAA_CONTENT;
-    fs::write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
+    write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
 
     src
 }
@@ -240,7 +243,7 @@ fn filter_by_mut_closure() {
         .unwrap();
 
     assert_eq!(
-        fs::read(&dest.path().join("a/aa/aaafile")).unwrap(),
+        read(&dest.path().join("a/aa/aaafile")).unwrap(),
         AAA_CONTENT,
     );
     assert!(!dest.path().join("b").exists());
@@ -268,7 +271,7 @@ fn filter_by_mut_closure() {
 fn after_entry_copied_callback() {
     let src = setup_a_b_src();
     let dest = tempfile::tempdir().unwrap();
-    let mut progress_seen: Vec<(PathBuf, fs::FileType)> = Vec::new();
+    let mut progress_seen: Vec<(PathBuf, FileType)> = Vec::new();
     let mut last_stats = CopyStats::default();
 
     // We can't count on the entries being seen in any particular order, but there are other
