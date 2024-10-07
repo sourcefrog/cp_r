@@ -33,8 +33,13 @@ fn basic_copy() {
     dbg!(src_mtime, dest_mtime);
 
     // Filesystems might not retain perfect resolution on mtimes, but they should at least be
-    // within 1ms everywhere(?)
-    assert!((src_mtime - dest_mtime).as_millis_f64() < 1.0);
+    // within 1ms everywhere(?); the error might be in either direction.
+    let d = dest_mtime
+        .duration_since(src_mtime)
+        .or_else(|_| src_mtime.duration_since(dest_mtime))
+        .unwrap();
+    dbg!(d);
+    assert!(d.as_micros() < 1000);
 }
 
 #[test]
