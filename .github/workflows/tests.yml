@@ -19,17 +19,21 @@ jobs:
     strategy:
       matrix:
         os: [macOS-latest, ubuntu-latest, windows-latest]
+        version: [stable, nightly, "1.63"]
 
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Show Cargo and rustc version
-      run: |
-        cargo --version
-        rustc --version
-    - name: Build
-      run: cargo build --all-targets
-    - name: Test
-      run: cargo test
-
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.version }}
+          components: rustfmt
+      - name: Show Cargo and rustc version
+        run: |
+          cargo --version
+          rustc --version
+      - name: Build
+        run: cargo build --all-targets
+      - name: Test
+        run: cargo test
