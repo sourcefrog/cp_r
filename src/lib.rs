@@ -46,6 +46,8 @@
 //!
 //! * New: Copy symlinks on Windows.
 //!
+//! * New: Declared and tested MSRV of 1.63.
+//!
 //! ## 0.5.1
 //!
 //! Released 2022-03-24.
@@ -468,7 +470,7 @@ fn copy_file(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
         .map_err(|io| Error::from_io_error(io, ErrorKind::ReadFile, src))?;
     let src_mtime = filetime::FileTime::from_last_modification_time(&src_metadata);
     // It's OK if we can't set the mtime.
-    let _ = filetime::set_file_mtime(&dest, src_mtime);
+    let _ = filetime::set_file_mtime(dest, src_mtime);
 
     // Permissions should have already been set by fs::copy.
     stats.files += 1;
