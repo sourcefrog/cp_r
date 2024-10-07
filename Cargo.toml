@@ -1,6 +1,6 @@
 [package]
 name = "cp_r"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2018"
 authors = ["Martin Pool"]
 description = "Copy files and directories recursively, preserving mtime and permissions"
@@ -14,5 +14,5 @@ rust-version = "1.63"
 filetime = "0.2.6"
 
 [dev-dependencies]
-anyhow = "1.0"   # to test attaching context
+anyhow = "1.0.60" # to test attaching context
 tempfile = "3.8"
