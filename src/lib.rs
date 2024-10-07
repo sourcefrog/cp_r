@@ -1,4 +1,4 @@
-// Copyright 2021, 2022 Martin Pool
+// Copyright 2021-2024 Martin Pool
 
 //! Copy a directory tree, including mtimes and permissions.
 //!
@@ -35,12 +35,16 @@
 //! // Copy this crate's `src` directory.
 //! let dest = tempfile::tempdir().unwrap();
 //! let stats = CopyOptions::new().copy_tree(Path::new("src"), dest.path()).unwrap();
-//! assert_eq!(stats.files, 1, "only one file in src");
+//! assert_eq!(stats.files, 2);
 //! assert_eq!(stats.dirs, 0, "no children");
 //! assert_eq!(stats.symlinks, 0, "no symlinks");
 //! ```
 //!
 //! # Release history
+//!
+//! ## Unreleased
+//!
+//! * New: Copy symlinks on Windows.
 //!
 //! ## 0.5.1
 //!
@@ -131,6 +135,12 @@ use std::fmt;
 use std::fs::{self, DirEntry};
 use std::io;
 use std::path::{Path, PathBuf};
+
+#[cfg(windows)]
+mod windows;
+
+#[cfg(windows)]
+use windows::copy_symlink;
 
 /// Options for copying file trees.
 ///
@@ -479,9 +489,4 @@ fn copy_symlink(src: &Path, dest: &Path, stats: &mut CopyStats) -> Result<()> {
         .map_err(|io| Error::from_io_error(io, ErrorKind::CreateSymlink, dest))?;
     stats.symlinks += 1;
     Ok(())
-}
-
-#[cfg(windows)]
-fn copy_symlink(_src: &Path, _dest: &Path, _stats: &mut CopyStats) -> Result<()> {
-    unimplemented!("symlinks are not yet supported on Windows");
 }
