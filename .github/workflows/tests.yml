@@ -36,6 +36,8 @@ jobs:
         run: cargo build --all-targets
       - name: Test
         run: cargo test
+      - name: rustfmt
+        run: cargo fmt --all -- --check
 
   minimal-versions:
     strategy:
