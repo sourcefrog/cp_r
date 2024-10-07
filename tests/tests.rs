@@ -24,12 +24,12 @@ fn basic_copy() {
         .unwrap();
 
     let dest_file_path = &dest.path().join(file_name);
-    assert_eq!(read(&dest_file_path).unwrap(), file_content);
+    assert_eq!(read(dest_file_path).unwrap(), file_content);
     assert_eq!(stats.files, 1);
     assert_eq!(stats.file_bytes, file_content.len() as u64);
 
     let src_mtime = metadata(&src_file_path).unwrap().modified().unwrap();
-    let dest_mtime = metadata(&dest_file_path).unwrap().modified().unwrap();
+    let dest_mtime = metadata(dest_file_path).unwrap().modified().unwrap();
     dbg!(src_mtime, dest_mtime);
 
     // Filesystems might not retain perfect resolution on mtimes, but they should at least be
@@ -53,17 +53,17 @@ fn subdirs() {
     create_dir(src.path().join("b/bb")).unwrap();
 
     let file_content = b"some file content\n";
-    write(&src.path().join("a/aa/aaafile"), &file_content).unwrap();
+    write(src.path().join("a/aa/aaafile"), file_content).unwrap();
 
     // Note here that we can just path a reference to the TempDirs without calling
     // `.path()`, because they `AsRef` to a `Path`.
     let stats = CopyOptions::default().copy_tree(&src, &dest).unwrap();
 
     assert_eq!(
-        read(&dest.path().join("a/aa/aaafile")).unwrap(),
+        read(dest.path().join("a/aa/aaafile")).unwrap(),
         file_content
     );
-    assert!(metadata(&dest.path().join("b/bb"))
+    assert!(metadata(dest.path().join("b/bb"))
         .unwrap()
         .file_type()
         .is_dir());
@@ -133,7 +133,7 @@ fn optionally_destination_must_exist() {
 fn clean_error_failing_to_copy_devices() {
     let dest = tempfile::tempdir().unwrap();
     let err = CopyOptions::new()
-        .copy_tree("/dev", &dest.path())
+        .copy_tree("/dev", dest.path())
         .unwrap_err();
     println!("{:#?}", err);
     let kind = err.kind();
@@ -183,10 +183,10 @@ fn filter_by_path() {
     let src = tempfile::tempdir().unwrap();
     let dest = tempfile::tempdir().unwrap();
 
-    create_dir(&src.path().join("a")).unwrap();
-    create_dir(&src.path().join("b")).unwrap();
-    create_dir(&src.path().join("b/bb")).unwrap();
-    create_dir(&src.path().join("a").join("aa")).unwrap();
+    create_dir(src.path().join("a")).unwrap();
+    create_dir(src.path().join("b")).unwrap();
+    create_dir(src.path().join("b/bb")).unwrap();
+    create_dir(src.path().join("a").join("aa")).unwrap();
 
     let file_content = b"some file content\n";
     write(src.path().join("a/aa/aaafile"), file_content).unwrap();
