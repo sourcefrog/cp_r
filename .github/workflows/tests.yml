@@ -39,6 +39,7 @@ jobs:
       - name: rustfmt
         run: cargo fmt --all -- --check
 
+  # Downgrade to the lowest supposedly supported dependency versions and run the tests.
   minimal-versions:
     strategy:
       matrix:
@@ -54,5 +55,19 @@ jobs:
         with:
           toolchain: ${{ matrix.version }}
           components: rustfmt
+      - run: cargo build --all-targets
+      - run: cargo test
+
+  # Run `cargo update` and check the tests still pass
+  maximal-versions:
+    strategy:
+      matrix:
+        os: [macOS-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo update
       - run: cargo build --all-targets
       - run: cargo test
