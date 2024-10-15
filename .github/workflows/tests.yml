@@ -39,6 +39,7 @@ jobs:
       - name: rustfmt
         run: cargo fmt --all -- --check
 
+  # Downgrade to the lowest supposedly supported dependency versions and run the tests.
   minimal-versions:
     strategy:
       matrix:
@@ -56,3 +57,44 @@ jobs:
           components: rustfmt
       - run: cargo build --all-targets
       - run: cargo test
+
+  # Run `cargo update` and check the tests still pass
+  maximal-versions:
+    strategy:
+      matrix:
+        os: [macOS-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo update
+      - run: cargo build --all-targets
+      - run: cargo test
+
+  # Run the tests from the package artifact
+  tests-from-tarball:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo package --no-verify
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: |
+            target/package
+      - name: Unpack package
+        run: |
+          cd target/package
+          ls -l
+          tar xvf cp_r*.crate
+      - name: Run tests from package
+        run: |
+          cd target/package/cp_r-*.*.[0-9]
+          cargo test
